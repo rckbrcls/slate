@@ -1,0 +1,288 @@
+/* Courier Prime Font Faces */
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* Screenplay Page Container */
+.screenplay-page {
+  width: 8.5in;
+  min-height: 11in;
+  padding: 1in 1in 1in 1.5in;
+  background: white;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  border-radius: 2px;
+}
+
+/* Base Editor Styles */
+.screenplay-editor {
+  font-family: "Courier Prime", "Courier New", Courier, monospace;
+  font-size: 12pt;
+  line-height: 1;
+  color: #000;
+  outline: none;
+}
+
+.screenplay-editor > * + * {
+  margin-top: 0;
+}
+
+/* Scene Heading */
+.screenplay-editor [data-type="sceneHeading"] {
+  text-transform: uppercase;
+  font-weight: 700;
+  margin-top: 1em;
+  margin-bottom: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.screenplay-editor [data-type="sceneHeading"]:first-child {
+  margin-top: 0;
+}
+
+/* Action */
+.screenplay-editor [data-type="action"] {
+  margin-top: 0.5em;
+  margin-bottom: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Character */
+.screenplay-editor [data-type="character"] {
+  text-transform: uppercase;
+  margin-top: 0.5em;
+  margin-bottom: 0;
+  margin-left: 2.2in;
+  margin-right: 0;
+}
+
+/* Dialogue */
+.screenplay-editor [data-type="dialogue"] {
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-left: 1in;
+  margin-right: 1.3in;
+}
+
+/* Parenthetical */
+.screenplay-editor [data-type="parenthetical"] {
+  margin-top: 0;
+  margin-bottom: 0;
+  margin-left: 1.6in;
+  margin-right: 1.9in;
+}
+
+/* Transition */
+.screenplay-editor [data-type="transition"] {
+  text-align: right;
+  text-transform: uppercase;
+  margin-top: 0.5em;
+  margin-bottom: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Dual Dialogue */
+.screenplay-editor [data-type="dualDialogue"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5in;
+  margin-top: 0.5em;
+  margin-bottom: 0;
+}
+
+.screenplay-editor [data-type="dualDialogueColumn"] {
+  min-width: 0;
+}
+
+.screenplay-editor [data-type="dualDialogueColumn"] [data-type="character"] {
+  margin-left: 0.6in;
+}
+
+.screenplay-editor [data-type="dualDialogueColumn"] [data-type="dialogue"] {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Page Break */
+.screenplay-editor [data-type="pageBreak"] {
+  border-top: 2px dashed #ccc;
+  margin: 1em 0;
+  height: 0;
+}
+
+/* Section (outline/structure) */
+.screenplay-editor [data-type="section"] {
+  font-weight: 700;
+  color: #4a5568;
+  background: #f7fafc;
+  padding: 0.25em 0.5em;
+  border-left: 3px solid #4a5568;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+/* Synopsis */
+.screenplay-editor [data-type="synopsis"] {
+  color: #718096;
+  font-style: italic;
+  background: #fffbeb;
+  padding: 0.25em 0.5em;
+  border-left: 3px solid #ecc94b;
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+/* Note */
+.screenplay-editor [data-type="note"] {
+  color: #718096;
+  background: #ebf8ff;
+  padding: 0.25em 0.5em;
+  border-left: 3px solid #63b3ed;
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+  font-size: 10pt;
+}
+
+/* Hide non-printable elements in print */
+@media print {
+  .screenplay-editor [data-type="section"],
+  .screenplay-editor [data-type="synopsis"],
+  .screenplay-editor [data-type="note"] {
+    display: none;
+  }
+
+  .screenplay-page {
+    box-shadow: none;
+    border-radius: 0;
+  }
+}
+
+/* Placeholder styles */
+.screenplay-editor .is-empty::before {
+  content: attr(data-placeholder);
+  color: #a0aec0;
+  pointer-events: none;
+  position: absolute;
+  height: 0;
+  float: left;
+}
+
+/* Centered action (for title cards, etc.) */
+.screenplay-editor [data-type="action"][data-centered="true"] {
+  text-align: center;
+}
+
+/* Page Break Markers (from pagination) */
+.screenplay-page-break-marker {
+  position: relative;
+  height: 0;
+  border-top: 1px dashed #94a3b8;
+  margin: 1em 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.screenplay-page-number {
+  position: absolute;
+  right: -0.75in;
+  top: -0.6em;
+  font-family: "Courier Prime", "Courier New", Courier, monospace;
+  font-size: 10pt;
+  color: #94a3b8;
+}
+
+.screenplay-more-indicator {
+  display: block;
+  text-align: center;
+  font-family: "Courier Prime", "Courier New", Courier, monospace;
+  font-size: 12pt;
+  color: #64748b;
+  margin-top: -1.2em;
+  margin-bottom: 0.2em;
+}
+
+.screenplay-contd-indicator {
+  font-family: "Courier Prime", "Courier New", Courier, monospace;
+  font-size: 12pt;
+  color: #64748b;
+  margin-left: 2.2in;
+  margin-top: 0.2em;
+}
+
+/* Scene Numbers (Production Mode) */
+.screenplay-editor .scene-heading-numbered {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+}
+
+.screenplay-editor .scene-heading-text {
+  flex: 1;
+}
+
+.screenplay-editor .scene-number {
+  font-family: "Courier Prime", "Courier New", Courier, monospace;
+  font-size: 12pt;
+  font-weight: 700;
+  color: #000;
+  user-select: none;
+  position: absolute;
+}
+
+.screenplay-editor .scene-number-left {
+  left: -1.2in;
+}
+
+.screenplay-editor .scene-number-right {
+  right: -0.75in;
+}
+
+/* Revision Marks */
+.screenplay-editor .revision-mark {
+  position: relative;
+}
+
+.screenplay-editor .revision-blue { background-color: #dbeafe; color: #1a1a1a; }
+.screenplay-editor .revision-pink { background-color: #fce7f3; color: #1a1a1a; }
+.screenplay-editor .revision-yellow { background-color: #fef9c3; color: #1a1a1a; }
+.screenplay-editor .revision-green { background-color: #dcfce7; color: #1a1a1a; }
+.screenplay-editor .revision-goldenrod { background-color: #fef3c7; color: #1a1a1a; }
+.screenplay-editor .revision-buff { background-color: #fde68a; color: #1a1a1a; }
+.screenplay-editor .revision-salmon { background-color: #fed7aa; color: #1a1a1a; }
+.screenplay-editor .revision-white { background-color: transparent; }
+
+/* Title Page */
+.screenplay-title-page {
+  cursor: pointer;
+  margin-right: 1rem;
+}
