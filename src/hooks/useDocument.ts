@@ -8,6 +8,8 @@ import {
   saveFountainFile,
   saveAsFountainFile,
 } from "@/lib/fileService"
+import { readTextFile } from "@tauri-apps/plugin-fs"
+import { useFileWatcher } from "@/hooks/useFileWatcher"
 
 interface DocumentState {
   filePath: string | null
@@ -15,6 +17,20 @@ interface DocumentState {
   titlePage: TitlePage
   fileName: string
   error: string | null
+  externalChangePending: boolean
+  contentVersion: number
+}
+
+function getFileName(path: string | null) {
+  if (!path) return "Untitled"
+  return path.split("/").pop() || "Untitled"
+}
+
+function getEmptyDocument() {
+  return {
+    type: "doc" as const,
+    content: [{ type: "sceneHeading" as const }],
+  }
 }
 
 export function useDocument(editorRef: React.RefObject<Editor | null>) {
@@ -24,43 +40,150 @@ export function useDocument(editorRef: React.RefObject<Editor | null>) {
     titlePage: {},
     fileName: "Untitled",
     error: null,
+    externalChangePending: false,
+    contentVersion: 0,
   })
 
   const titlePageRef = useRef<TitlePage>({})
   titlePageRef.current = state.titlePage
+  const contentVersionRef = useRef(0)
+  const ignoreNextEditorUpdateRef = useRef(false)
+
+  const nextContentVersion = useCallback(() => {
+    contentVersionRef.current += 1
+    return contentVersionRef.current
+  }, [])
+
+  const markProgrammaticContentUpdate = useCallback(() => {
+    ignoreNextEditorUpdateRef.current = true
+  }, [])
+
+  const consumeProgrammaticContentUpdate = useCallback(() => {
+    const shouldIgnore = ignoreNextEditorUpdateRef.current
+    ignoreNextEditorUpdateRef.current = false
+    return shouldIgnore
+  }, [])
 
   const clearError = useCallback(() => {
     setState((prev) => ({ ...prev, error: null }))
   }, [])
 
-  // Auto-save debounced (3 seconds after last edit, only if file has a path)
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const markDirty = useCallback(() => {
     setState((prev) => ({ ...prev, isDirty: true }))
 
-    // Clear previous auto-save timer
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current)
     }
   }, [])
 
-  const getFountainContent = useCallback((): string | null => {
+  const getLiveEditor = useCallback(() => {
     const editor = editorRef.current
-    if (!editor) return null
-    return editorToFountain(editor.state.doc, titlePageRef.current)
+    if (!editor || editor.isDestroyed) return null
+    return editor
   }, [editorRef])
 
-  // Trigger auto-save when dirty changes
+  const getFountainContent = useCallback((): string | null => {
+    const editor = getLiveEditor()
+    if (!editor) return null
+    return editorToFountain(editor.state.doc, titlePageRef.current)
+  }, [getLiveEditor])
+
+  const loadDocument = useCallback(async (path: string) => {
+    const raw = await readTextFile(path)
+    const { content, titlePage } = fountainToEditor(raw)
+    const editor = getLiveEditor()
+    if (!editor) return false
+
+    markProgrammaticContentUpdate()
+    editor.commands.setContent(content)
+    titlePageRef.current = titlePage
+    setState({
+      filePath: path,
+      isDirty: false,
+      titlePage,
+      fileName: getFileName(path),
+      error: null,
+      externalChangePending: false,
+      contentVersion: nextContentVersion(),
+    })
+
+    return true
+  }, [getLiveEditor, markProgrammaticContentUpdate, nextContentVersion])
+
+  const handleExternalChange = useCallback(async () => {
+    if (!state.filePath) return
+
+    if (state.isDirty) {
+      setState((prev) => (
+        prev.externalChangePending ? prev : { ...prev, externalChangePending: true }
+      ))
+      return
+    }
+
+    try {
+      const newFileContent = await readTextFile(state.filePath)
+      const editor = getLiveEditor()
+      if (!editor) return
+      const currentContent = editorToFountain(editor.state.doc, titlePageRef.current)
+      if (!currentContent || currentContent === newFileContent) return
+
+      const { content, titlePage } = fountainToEditor(newFileContent)
+      markProgrammaticContentUpdate()
+      editor.commands.setContent(content)
+      titlePageRef.current = titlePage
+      setState((prev) => ({
+        ...prev,
+        isDirty: false,
+        titlePage,
+        error: null,
+        externalChangePending: false,
+        contentVersion: nextContentVersion(),
+      }))
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: `Failed to read external changes: ${err instanceof Error ? err.message : String(err)}`,
+      }))
+    }
+  }, [getLiveEditor, markProgrammaticContentUpdate, nextContentVersion, state.filePath, state.isDirty])
+
+  const { notifySaved } = useFileWatcher(state.filePath, {
+    enabled: Boolean(state.filePath),
+    onExternalChange: handleExternalChange,
+  })
+
+  const reloadFromDisk = useCallback(async () => {
+    if (!state.filePath) return false
+
+    try {
+      return await loadDocument(state.filePath)
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: `Failed to reload file: ${err instanceof Error ? err.message : String(err)}`,
+      }))
+      return false
+    }
+  }, [state.filePath, loadDocument])
+
   useEffect(() => {
     if (!state.isDirty || !state.filePath) return
 
     autoSaveTimerRef.current = setTimeout(async () => {
       const content = getFountainContent()
       if (!content || !state.filePath) return
+
+      notifySaved()
       const result = await saveFountainFile(state.filePath, content)
       if (result.ok) {
-        setState((prev) => ({ ...prev, isDirty: false }))
+        setState((prev) => ({
+          ...prev,
+          isDirty: false,
+          error: null,
+          externalChangePending: false,
+        }))
       }
     }, 3000)
 
@@ -69,93 +192,117 @@ export function useDocument(editorRef: React.RefObject<Editor | null>) {
         clearTimeout(autoSaveTimerRef.current)
       }
     }
-  }, [state.isDirty, state.filePath, getFountainContent])
+  }, [state.isDirty, state.filePath, getFountainContent, notifySaved])
 
   const openFile = useCallback(async () => {
-    const editor = editorRef.current
-    if (!editor) return
+    const editor = getLiveEditor()
+    if (!editor) return null
 
     const result = await openFountainFile()
     if (!result.ok) {
       if (result.error !== "cancelled") {
         setState((prev) => ({ ...prev, error: result.error }))
       }
-      return
+      return null
     }
 
     const { content, titlePage } = fountainToEditor(result.data.content)
+    markProgrammaticContentUpdate()
     editor.commands.setContent(content)
 
-    const fileName = result.data.path.split("/").pop() || "Untitled"
     setState({
       filePath: result.data.path,
       isDirty: false,
       titlePage,
-      fileName,
+      fileName: getFileName(result.data.path),
       error: null,
+      externalChangePending: false,
+      contentVersion: nextContentVersion(),
     })
     titlePageRef.current = titlePage
-  }, [editorRef])
+    return result.data.path
+  }, [getLiveEditor, markProgrammaticContentUpdate, nextContentVersion])
 
   const saveFile = useCallback(async () => {
     const content = getFountainContent()
-    if (!content) return
+    if (!content) return false
 
     if (state.filePath) {
+      notifySaved()
       const result = await saveFountainFile(state.filePath, content)
       if (!result.ok) {
         setState((prev) => ({ ...prev, error: result.error }))
-        return
+        return false
       }
-      setState((prev) => ({ ...prev, isDirty: false, error: null }))
-    } else {
-      const result = await saveAsFountainFile(content)
-      if (!result.ok) {
-        if (result.error !== "cancelled") {
-          setState((prev) => ({ ...prev, error: result.error }))
-        }
-        return
-      }
-      const fileName = result.data.split("/").pop() || "Untitled"
       setState((prev) => ({
         ...prev,
-        filePath: result.data,
         isDirty: false,
-        fileName,
         error: null,
+        externalChangePending: false,
       }))
+      return true
     }
-  }, [state.filePath, getFountainContent])
-
-  const saveAsFile = useCallback(async () => {
-    const content = getFountainContent()
-    if (!content) return
 
     const result = await saveAsFountainFile(content)
     if (!result.ok) {
       if (result.error !== "cancelled") {
         setState((prev) => ({ ...prev, error: result.error }))
       }
-      return
+      return false
     }
-    const fileName = result.data.split("/").pop() || "Untitled"
+
     setState((prev) => ({
       ...prev,
       filePath: result.data,
       isDirty: false,
-      fileName,
+      fileName: getFileName(result.data),
       error: null,
+      externalChangePending: false,
     }))
+    return true
+  }, [state.filePath, getFountainContent, notifySaved])
+
+  const saveAsFile = useCallback(async () => {
+    const content = getFountainContent()
+    if (!content) return null
+
+    const result = await saveAsFountainFile(content)
+    if (!result.ok) {
+      if (result.error !== "cancelled") {
+        setState((prev) => ({ ...prev, error: result.error }))
+      }
+      return null
+    }
+
+    setState((prev) => ({
+      ...prev,
+      filePath: result.data,
+      isDirty: false,
+      fileName: getFileName(result.data),
+      error: null,
+      externalChangePending: false,
+    }))
+    return result.data
   }, [getFountainContent])
 
+  const openFilePath = useCallback(async (path: string) => {
+    try {
+      return await loadDocument(path)
+    } catch (err) {
+      setState((prev) => ({
+        ...prev,
+        error: `Failed to open file: ${err instanceof Error ? err.message : String(err)}`,
+      }))
+      return false
+    }
+  }, [loadDocument])
+
   const newFile = useCallback(() => {
-    const editor = editorRef.current
+    const editor = getLiveEditor()
     if (!editor) return
 
-    editor.commands.setContent({
-      type: "doc",
-      content: [{ type: "sceneHeading" }],
-    })
+    markProgrammaticContentUpdate()
+    editor.commands.setContent(getEmptyDocument())
 
     setState({
       filePath: null,
@@ -163,17 +310,48 @@ export function useDocument(editorRef: React.RefObject<Editor | null>) {
       titlePage: {},
       fileName: "Untitled",
       error: null,
+      externalChangePending: false,
+      contentVersion: nextContentVersion(),
     })
     titlePageRef.current = {}
-  }, [editorRef])
+  }, [getLiveEditor, markProgrammaticContentUpdate, nextContentVersion])
+
+  const closeProject = useCallback(() => {
+    const editor = getLiveEditor()
+    if (editor) {
+      markProgrammaticContentUpdate()
+      editor.commands.setContent(getEmptyDocument())
+    }
+
+    setState({
+      filePath: null,
+      isDirty: false,
+      titlePage: {},
+      fileName: "Untitled",
+      error: null,
+      externalChangePending: false,
+      contentVersion: nextContentVersion(),
+    })
+    titlePageRef.current = {}
+  }, [getLiveEditor, markProgrammaticContentUpdate, nextContentVersion])
 
   return {
-    ...state,
+    filePath: state.filePath,
+    isDirty: state.isDirty,
+    titlePage: state.titlePage,
+    fileName: state.fileName,
+    error: state.error,
+    externalChangePending: state.externalChangePending,
+    contentVersion: state.contentVersion,
     clearError,
+    consumeProgrammaticContentUpdate,
     markDirty,
     openFile,
+    openFilePath,
     saveFile,
     saveAsFile,
+    reloadFromDisk,
     newFile,
+    closeProject,
   }
 }

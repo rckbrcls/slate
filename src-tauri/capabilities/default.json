@@ -8,16 +8,39 @@
   "permissions": [
     "core:default",
     "fs:default",
-    "fs:allow-write-text-file",
-    "fs:allow-write-file",
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "$HOME/**" }]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [{ "path": "$HOME/**" }]
+    },
     "dialog:default",
     "shell:default",
+    "store:default",
     {
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "claude",
-          "cmd": "claude",
+          "name": "git",
+          "cmd": "git",
           "args": true
         }
       ]

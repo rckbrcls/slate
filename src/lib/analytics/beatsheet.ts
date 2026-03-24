@@ -35,3 +35,29 @@ export function mapBeatsToPages(totalPages: number): BeatMarker[] {
     act: beat.act,
   }))
 }
+
+export const BEAT_DESCRIPTIONS: Record<string, string> = {
+  "Opening Image": "A visual that sets the tone and shows the protagonist's starting world.",
+  "Theme Stated": "Someone hints at the story's deeper meaning — the hero doesn't get it yet.",
+  "Setup": "Introduce the main characters, their world, and what's missing in their lives.",
+  "Catalyst": "An event disrupts the status quo and forces the hero to react.",
+  "Debate": "The hero hesitates — should they accept the call to adventure?",
+  "Break Into Two": "The hero commits and enters a new world or situation.",
+  "B Story": "A secondary storyline begins, often a love interest or mentor relationship.",
+  "Fun & Games": "The promise of the premise — the part audiences came to see.",
+  "Midpoint": "Stakes raise dramatically — a false victory or false defeat.",
+  "Bad Guys Close In": "External pressures mount and internal flaws start showing.",
+  "All Is Lost": "The lowest point — something or someone important is lost.",
+  "Dark Night of Soul": "The hero processes their loss and finds inner strength.",
+  "Break Into Three": "Armed with new insight, the hero decides to fight back.",
+  "Finale": "The hero confronts the main conflict using everything they've learned.",
+  "Final Image": "A visual that mirrors the opening — showing how the world has changed.",
+}
+
+export function getBeatProgress(
+  beats: BeatMarker[],
+  currentPages: number,
+): { reached: number; total: number } {
+  const reached = beats.filter((b) => currentPages >= b.targetPage).length
+  return { reached, total: beats.length }
+}

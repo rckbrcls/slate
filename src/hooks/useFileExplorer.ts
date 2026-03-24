@@ -42,10 +42,10 @@ const HIDDEN_ENTRIES = new Set([
   "build",
 ])
 
-export function useFileExplorer(filePath: string | null): UseFileExplorerReturn {
+export function useFileExplorer(filePath: string | null, explicitProjectDir?: string | null): UseFileExplorerReturn {
   const [tree, setTree] = useState<FileNode[]>([])
   const [loading, setLoading] = useState(false)
-  const projectDir = deriveProjectDir(filePath)
+  const projectDir = explicitProjectDir ?? deriveProjectDir(filePath)
   const loadedDirsRef = useRef<Set<string>>(new Set())
 
   const loadDirectory = useCallback(async (dirPath: string): Promise<FileNode[]> => {

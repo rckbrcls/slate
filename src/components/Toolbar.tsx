@@ -19,10 +19,12 @@ import {
   Download,
   Bot,
   BarChart3,
+  FolderTree,
   Hash,
   Lock,
   Unlock,
   Palette,
+  Home,
 } from "lucide-react"
 import { REVISION_COLORS, type RevisionColorIndex } from "@/extensions/RevisionMark"
 
@@ -40,6 +42,8 @@ interface ToolbarProps {
   onToggleAI?: () => void
   showAI?: boolean
   onOpenStats?: () => void
+  onToggleFileExplorer?: () => void
+  showFileExplorer?: boolean
   // Production mode
   productionMode?: boolean
   onAutoNumber?: () => void
@@ -47,6 +51,7 @@ interface ToolbarProps {
   onUnlockScenes?: () => void
   onClearNumbers?: () => void
   onSetRevisionColor?: (color: RevisionColorIndex) => void
+  onCloseProject?: () => void
 }
 
 function ToolbarButton({
@@ -84,15 +89,26 @@ export function Toolbar({
   onToggleAI,
   showAI,
   onOpenStats,
+  onToggleFileExplorer,
+  showFileExplorer,
   onAutoNumber,
   onLockScenes,
   onUnlockScenes,
   onClearNumbers,
   onSetRevisionColor,
+  onCloseProject,
 }: ToolbarProps) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border px-3">
       <div className="flex items-center gap-1">
+        {onCloseProject && (
+          <>
+            <ToolbarButton onClick={onCloseProject} title="Back to Projects">
+              <Home className="size-4" />
+            </ToolbarButton>
+            <Separator orientation="vertical" className="mx-1 h-5" />
+          </>
+        )}
         <ToolbarButton onClick={onNew} title="New (⌘N)">
           <FilePlus className="size-4" />
         </ToolbarButton>
@@ -234,6 +250,11 @@ export function Toolbar({
       </div>
 
       <div className="ml-auto flex items-center gap-1">
+        {onToggleFileExplorer && (
+          <ToolbarButton onClick={onToggleFileExplorer} title="File Explorer">
+            <FolderTree className={`size-4 ${showFileExplorer ? "text-primary" : ""}`} />
+          </ToolbarButton>
+        )}
         {onOpenStats && (
           <ToolbarButton onClick={onOpenStats} title="Statistics">
             <BarChart3 className="size-4" />

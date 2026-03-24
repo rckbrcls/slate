@@ -1,19 +1,10 @@
-import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { QUICK_ACTIONS } from "@/lib/claude/quickActions"
-import type { ClaudeStreamEvent } from "@/lib/claude/streamParser"
-import { formatToolUse, getToolIcon, getPhaseLabel } from "@/lib/claude/streamParser"
-import type { ClaudeStatus } from "@/hooks/useClaude"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Send,
-  Check,
-  X,
-  Loader2,
+  RefreshCw,
+  Terminal,
   LayoutGrid,
   MessageCircle,
   CheckCircle,
@@ -22,178 +13,75 @@ import {
   Scissors,
   Heart,
   Globe,
+  Copy,
 } from "lucide-react"
+import { toast } from "sonner"
 
-const ICON_MAP: Record<string, React.ReactNode> = {
-  layout: <LayoutGrid className="size-4" />,
-  "message-circle": <MessageCircle className="size-4" />,
-  "check-circle": <CheckCircle className="size-4" />,
-  "trending-up": <TrendingUp className="size-4" />,
-  users: <Users className="size-4" />,
-  scissors: <Scissors className="size-4" />,
-  heart: <Heart className="size-4" />,
-  globe: <Globe className="size-4" />,
-}
+const PROMPT_SUGGESTIONS = [
+  {
+    id: "analyze-structure",
+    label: "Analyze Structure",
+    icon: <LayoutGrid className="size-4" />,
+    prompt: "Analyze the structure of this screenplay. Identify the act breaks, major turning points, and pacing issues.",
+  },
+  {
+    id: "improve-dialogue",
+    label: "Improve Dialogue",
+    icon: <MessageCircle className="size-4" />,
+    prompt: "Read this screenplay and improve the naturalness of the dialogue. Make characters sound more distinct from each other.",
+  },
+  {
+    id: "check-wga",
+    label: "Check WGA Format",
+    icon: <CheckCircle className="size-4" />,
+    prompt: "Review this screenplay for WGA formatting compliance. Check scene headings, character cues, transitions, parentheticals.",
+  },
+  {
+    id: "strengthen-act2",
+    label: "Strengthen Act 2",
+    icon: <TrendingUp className="size-4" />,
+    prompt: "Analyze the second act of this screenplay. Identify where the midpoint occurs, whether there's sufficient rising action.",
+  },
+  {
+    id: "character-consistency",
+    label: "Character Consistency",
+    icon: <Users className="size-4" />,
+    prompt: "Analyze each character for consistency. Check if their voice, motivations, and behavior remain consistent throughout.",
+  },
+  {
+    id: "cut-pages",
+    label: "Trim Length",
+    icon: <Scissors className="size-4" />,
+    prompt: "This screenplay needs to be shorter. Identify scenes that can be cut or condensed, redundant dialogue to trim.",
+  },
+  {
+    id: "bechdel-analysis",
+    label: "Bechdel Analysis",
+    icon: <Heart className="size-4" />,
+    prompt: "Analyze this screenplay using the Bechdel test criteria.",
+  },
+  {
+    id: "world-building",
+    label: "World Building",
+    icon: <Globe className="size-4" />,
+    prompt: "Review the world-building for consistency. Check location descriptions, time continuity, and setting details.",
+  },
+]
 
 interface AISidePanelProps {
-  status: ClaudeStatus
-  log: ClaudeStreamEvent[]
-  error: string | null
-  diffHunkCount: number
-  onRunClaude: (instruction: string) => void
-  onAcceptAll: () => void
-  onRejectAll: () => void
+  externalChangePending: boolean
+  onReloadFromDisk: () => void
 }
 
-function StreamLog({ log, isRunning }: { log: ClaudeStreamEvent[]; isRunning: boolean }) {
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
-  }, [log])
-
-  return (
-    <div ref={scrollRef} className="h-full overflow-auto p-3 text-xs">
-      {log.map((event, i) => {
-        const isLast = i === log.length - 1
-        switch (event.type) {
-          case "assistant":
-            return (
-              <div key={i} className="mb-2 whitespace-pre-wrap text-foreground">
-                {event.message}
-                {isRunning && isLast && (
-                  <span className="ml-0.5 inline-block h-3.5 w-1 animate-pulse bg-foreground" />
-                )}
-              </div>
-            )
-          case "thinking":
-            return (
-              <div key={i} className="mb-2 text-muted-foreground italic">
-                {isRunning && isLast ? "Thinking..." : "Thought for a moment"}
-              </div>
-            )
-          case "tool_use":
-            return (
-              <div key={i} className="mb-1.5 flex items-center gap-1.5 text-blue-400">
-                <span>{getToolIcon(event.name)}</span>
-                <span>{formatToolUse(event.name, event.input)}</span>
-                {isRunning && isLast && (
-                  <Loader2 className="size-3 animate-spin" />
-                )}
-              </div>
-            )
-          case "tool_result":
-            return (
-              <div key={i} className="mb-1.5 flex items-center gap-1.5 text-muted-foreground">
-                <CheckCircle className="size-3 text-green-500" />
-                <span>{event.name ? `${event.name} complete` : "Done"}</span>
-              </div>
-            )
-          case "result":
-            return (
-              <div key={i} className="mt-2 rounded-md border border-green-500/20 bg-green-500/5 p-2">
-                <div className="font-medium text-green-400">{event.text}</div>
-                {event.cost != null && (
-                  <div className="mt-1 text-muted-foreground">
-                    Cost: ${event.cost.toFixed(4)}
-                  </div>
-                )}
-              </div>
-            )
-          case "error":
-            return (
-              <div key={i} className="mb-1.5 text-destructive">
-                {event.message}
-              </div>
-            )
-          case "system":
-            return (
-              <div key={i} className="mb-1.5 text-muted-foreground">
-                {event.message}
-              </div>
-            )
-        }
-      })}
-    </div>
-  )
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text)
+  toast.success("Copied to clipboard")
 }
 
 export function AISidePanel({
-  status,
-  log,
-  error,
-  diffHunkCount,
-  onRunClaude,
-  onAcceptAll,
-  onRejectAll,
+  externalChangePending,
+  onReloadFromDisk,
 }: AISidePanelProps) {
-  const [instruction, setInstruction] = useState("")
-
-  const handleSubmit = () => {
-    if (!instruction.trim()) return
-    onRunClaude(instruction.trim())
-    setInstruction("")
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      handleSubmit()
-    }
-  }
-
-  if (status === "reviewing") {
-    return (
-      <div className="flex h-full flex-col p-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm">
-              Review Changes
-              <Badge variant="secondary">{diffHunkCount} changes</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <p className="text-xs text-muted-foreground">
-              Claude has made changes to your screenplay. Review the highlighted diff in the editor.
-            </p>
-            <div className="flex gap-2">
-              <Button size="sm" onClick={onAcceptAll} className="flex-1">
-                <Check className="mr-1 size-3.5" />
-                Accept All
-              </Button>
-              <Button size="sm" variant="outline" onClick={onRejectAll} className="flex-1">
-                <X className="mr-1 size-3.5" />
-                Reject All
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {error && (
-          <p className="mt-2 text-xs text-destructive">{error}</p>
-        )}
-      </div>
-    )
-  }
-
-  if (status === "running") {
-    const phaseLabel = getPhaseLabel(log)
-    return (
-      <div className="flex h-full flex-col">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
-          <span className="text-sm text-muted-foreground">{phaseLabel}</span>
-        </div>
-        <ScrollArea className="flex-1">
-          <StreamLog log={log} isRunning />
-        </ScrollArea>
-      </div>
-    )
-  }
-
-  // Idle state
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-border px-3 py-2">
@@ -202,55 +90,58 @@ export function AISidePanel({
 
       <ScrollArea className="flex-1">
         <div className="space-y-3 p-3">
-          {/* Custom instruction */}
-          <div className="space-y-2">
-            <Textarea
-              placeholder="Ask Claude to edit your screenplay..."
-              value={instruction}
-              onChange={(e) => setInstruction(e.target.value)}
-              onKeyDown={handleKeyDown}
-              rows={3}
-              className="resize-none text-sm"
-            />
-            <Button
-              size="sm"
-              onClick={handleSubmit}
-              disabled={!instruction.trim()}
-              className="w-full"
-            >
-              <Send className="mr-1 size-3.5" />
-              Send to Claude
-            </Button>
+          {externalChangePending && (
+            <Card className="border-amber-500/30 bg-amber-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Disk Update Waiting</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  The file changed on disk while you still had unsaved edits in the editor.
+                </p>
+                <Button size="sm" onClick={onReloadFromDisk} className="w-full">
+                  <RefreshCw className="mr-1 size-3.5" />
+                  Reload from Disk
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="rounded-md border border-border bg-muted/30 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Terminal className="size-4 text-muted-foreground" />
+              Claude Code
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Run Claude Code in your terminal to edit this screenplay. Disk changes will sync here automatically when the editor is clean.
+            </p>
           </div>
 
           <Separator />
 
-          {/* Quick actions */}
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">Quick Actions</p>
-            <div className="grid grid-cols-2 gap-1.5">
-              {QUICK_ACTIONS.map((action) => (
+            <p className="text-xs font-medium text-muted-foreground">Prompt Suggestions</p>
+            <p className="text-xs text-muted-foreground">
+              Click to copy, then paste into Claude Code.
+            </p>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {PROMPT_SUGGESTIONS.map((suggestion) => (
                 <Button
-                  key={action.id}
+                  key={suggestion.id}
                   variant="outline"
                   size="sm"
                   className="h-auto justify-start gap-1.5 px-2 py-1.5 text-xs"
-                  onClick={() => onRunClaude(action.instruction)}
+                  onClick={() => copyToClipboard(suggestion.prompt)}
                 >
-                  {ICON_MAP[action.icon]}
-                  <span className="truncate">{action.label}</span>
+                  {suggestion.icon}
+                  <span className="truncate">{suggestion.label}</span>
+                  <Copy className="ml-auto size-3 opacity-50" />
                 </Button>
               ))}
             </div>
           </div>
         </div>
       </ScrollArea>
-
-      {error && (
-        <div className="border-t border-border px-3 py-2">
-          <p className="text-xs text-destructive">{error}</p>
-        </div>
-      )}
     </div>
   )
 }
