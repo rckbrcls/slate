@@ -166,7 +166,6 @@ Start with:
 - No backend server, hosted API, authentication, authorization, or database exists in the current codebase.
 - No CI/CD, release automation, signing, notarization, or auto-update workflow is configured.
 - The AI side panel provides prompt suggestions only; it does not execute AI calls or manage Claude Code processes.
-- `public/manifest.json` contains stale starter metadata and should be corrected or removed if a web/PWA surface becomes a real product target.
 - The Electron IPC bridge intentionally exposes local filesystem and Git features needed by the app; review handlers in `electron/main/index.ts` before distribution.
 
 ## License
