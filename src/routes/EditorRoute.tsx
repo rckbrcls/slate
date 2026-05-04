@@ -12,7 +12,7 @@ import { StatsSidePanel } from "@/components/StatsSidePanel"
 import { FileExplorer } from "@/components/FileExplorer"
 import { GitHistory } from "@/components/GitHistory"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
-import { useFileExplorer } from "@/hooks/useFileExplorer"
+import { useFileExplorer, type FileNode } from "@/hooks/useFileExplorer"
 import { useProjectStore } from "@/hooks/useProjectStore"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,16 @@ import { pageNumbersPluginKey } from "@/extensions/PageNumbers"
 import { paginate, type PaginationResult } from "@/lib/pagination"
 import { calculateStats, type ScreenplayStats } from "@/lib/stats"
 import { editorToFDX, generatePDF } from "@/lib/export"
-import { readDirectory, saveExportFile, saveBinaryFile } from "@/lib/fileService"
+import {
+  copyPathToClipboard,
+  duplicateFile,
+  movePathToTrash,
+  readDirectory,
+  renamePath,
+  revealPath,
+  saveBinaryFile,
+  saveExportFile,
+} from "@/lib/fileService"
 import { getPathDir, isPathInsideDirectory } from "@/lib/slateApi"
 import {
   applyAutoNumbering,
@@ -55,6 +64,19 @@ import { toast } from "sonner"
 
 function deriveProjectDir(filePath: string | null) {
   return getPathDir(filePath)
+}
+
+function replaceOpenPathPrefix(filePath: string, fromPath: string, toPath: string) {
+  if (filePath === fromPath) return toPath
+
+  if (
+    filePath.startsWith(`${fromPath}/`) ||
+    filePath.startsWith(`${fromPath}\\`)
+  ) {
+    return `${toPath}${filePath.slice(fromPath.length)}`
+  }
+
+  return filePath
 }
 
 const SCREENPLAY_EXTENSIONS = new Set(["fountain", "spmd"])
@@ -186,6 +208,7 @@ export function EditorRoute() {
     markDirty,
     openFile,
     openFilePath,
+    updateFilePath,
     saveFile,
     saveAsFile,
     reloadFromDisk,
@@ -195,6 +218,7 @@ export function EditorRoute() {
 
   const fileExplorer = useFileExplorer(filePath, activeProjectDir)
   const git = useGit(fileExplorer.projectDir)
+  const refreshFileExplorer = fileExplorer.refresh
   const visualPageCount = Math.max(pagination?.totalPages ?? 1, 1)
   const canZoomIn = paperZoom < PAPER_ZOOM_MAX
   const canZoomOut = paperZoom > PAPER_ZOOM_MIN
@@ -401,6 +425,84 @@ export function EditorRoute() {
       return deriveProjectDir(path)
     })
   }, [openFilePath])
+
+  const handleRenameExplorerEntry = useCallback(async (
+    node: FileNode,
+    nextName: string,
+  ) => {
+    const result = await renamePath(node.path, nextName)
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+
+    await refreshFileExplorer({ from: node.path, to: result.data })
+
+    if (filePath && isPathInsideDirectory(filePath, node.path)) {
+      updateFilePath(replaceOpenPathPrefix(filePath, node.path, result.data))
+    }
+
+    toast.success("Renamed")
+    return true
+  }, [filePath, refreshFileExplorer, updateFilePath])
+
+  const handleDuplicateExplorerFile = useCallback(async (node: FileNode) => {
+    const result = await duplicateFile(node.path)
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+
+    await refreshFileExplorer()
+    toast.success("File duplicated")
+    return true
+  }, [refreshFileExplorer])
+
+  const handleMoveExplorerEntryToTrash = useCallback(async (node: FileNode) => {
+    const affectsOpenFile = Boolean(
+      filePath && isPathInsideDirectory(filePath, node.path),
+    )
+
+    if (affectsOpenFile && isDirty) {
+      toast.error("Save or discard changes before moving the open file to Trash")
+      return false
+    }
+
+    const result = await movePathToTrash(node.path)
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+
+    await refreshFileExplorer()
+
+    if (affectsOpenFile) {
+      newFile()
+      if (activeProjectDir) {
+        updateLastFile(activeProjectDir, null)
+      }
+    }
+
+    toast.success("Moved to Trash")
+    return true
+  }, [activeProjectDir, filePath, isDirty, newFile, refreshFileExplorer, updateLastFile])
+
+  const handleRevealExplorerEntry = useCallback(async (node: FileNode) => {
+    const result = await revealPath(node.path)
+    if (!result.ok) {
+      toast.error(result.error)
+    }
+  }, [])
+
+  const handleCopyExplorerPath = useCallback(async (node: FileNode) => {
+    const result = await copyPathToClipboard(node.path)
+    if (result.ok) {
+      toast.success("Path copied")
+      return
+    }
+
+    toast.error(result.error)
+  }, [])
 
   const handleEditorReady = useCallback((editor: TiptapEditor) => {
     editorRef.current = editor
@@ -678,6 +780,11 @@ export function EditorRoute() {
                   onOpenFile={handleOpenFilePath}
                   currentFilePath={filePath}
                   gitStatus={git.isRepo ? git.status : undefined}
+                  onRenameEntry={handleRenameExplorerEntry}
+                  onDuplicateFile={handleDuplicateExplorerFile}
+                  onMoveToTrash={handleMoveExplorerEntryToTrash}
+                  onRevealEntry={handleRevealExplorerEntry}
+                  onCopyPath={handleCopyExplorerPath}
                   headerAction={
                     <Button
                       type="button"

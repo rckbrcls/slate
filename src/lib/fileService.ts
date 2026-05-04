@@ -28,6 +28,69 @@ export async function readDirectory(path: string): Promise<SlateFileEntry[]> {
   return getSlateApi().readDirectory(path)
 }
 
+export async function renamePath(
+  path: string,
+  nextName: string,
+): Promise<FileResponse<string>> {
+  try {
+    const renamedPath = await getSlateApi().renamePath(path, nextName)
+    return { ok: true, data: renamedPath }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to rename: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
+export async function duplicateFile(path: string): Promise<FileResponse<string>> {
+  try {
+    const copiedPath = await getSlateApi().duplicateFile(path)
+    return { ok: true, data: copiedPath }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to duplicate file: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
+export async function movePathToTrash(path: string): Promise<FileResponse<void>> {
+  try {
+    await getSlateApi().movePathToTrash(path)
+    return { ok: true, data: undefined }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to move to Trash: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
+export async function revealPath(path: string): Promise<FileResponse<void>> {
+  try {
+    await getSlateApi().revealPath(path)
+    return { ok: true, data: undefined }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to reveal file: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
+export async function copyPathToClipboard(path: string): Promise<FileResponse<void>> {
+  try {
+    await getSlateApi().copyPathToClipboard(path)
+    return { ok: true, data: undefined }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to copy path: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
 export async function statFile(path: string): Promise<SlateFileStat | null> {
   return getSlateApi().statFile(path)
 }

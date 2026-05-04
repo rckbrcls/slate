@@ -71,7 +71,7 @@ export function useProjectStore() {
     })
   }, [persist])
 
-  const updateLastFile = useCallback(async (dirPath: string, filePath: string) => {
+  const updateLastFile = useCallback(async (dirPath: string, filePath: string | null) => {
     setProjects((prev) => {
       const updated = prev.map((p) =>
         p.path === dirPath ? { ...p, lastFile: filePath } : p,

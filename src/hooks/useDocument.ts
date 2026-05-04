@@ -297,6 +297,16 @@ export function useDocument(editorRef: React.RefObject<Editor | null>) {
     }
   }, [loadDocument])
 
+  const updateFilePath = useCallback((path: string | null) => {
+    setState((prev) => ({
+      ...prev,
+      filePath: path,
+      fileName: getFileName(path),
+      error: null,
+      externalChangePending: false,
+    }))
+  }, [])
+
   const newFile = useCallback(() => {
     const editor = getLiveEditor()
     if (!editor) return
@@ -348,6 +358,7 @@ export function useDocument(editorRef: React.RefObject<Editor | null>) {
     markDirty,
     openFile,
     openFilePath,
+    updateFilePath,
     saveFile,
     saveAsFile,
     reloadFromDisk,
