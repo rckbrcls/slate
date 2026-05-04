@@ -194,10 +194,14 @@ vi.mock("@/components/Toolbar", () => ({
     fileName,
     onToggleFileExplorer,
     showFileExplorer,
+    onOpenStats,
+    showStats,
   }: {
     fileName: string
     onToggleFileExplorer?: () => void
     showFileExplorer?: boolean
+    onOpenStats?: () => void
+    showStats?: boolean
   }) => (
     <div>
       <div>{`Toolbar: ${fileName}`}</div>
@@ -208,6 +212,14 @@ vi.mock("@/components/Toolbar", () => ({
       )}
       <span data-testid="toolbar-sidebar-state">
         {showFileExplorer ? "expanded" : "collapsed"}
+      </span>
+      {onOpenStats && (
+        <button type="button" onClick={onOpenStats}>
+          Statistics
+        </button>
+      )}
+      <span data-testid="toolbar-statistics-state">
+        {showStats ? "active" : "inactive"}
       </span>
     </div>
   ),
@@ -285,7 +297,7 @@ vi.mock("@/components/TitlePageView", () => ({
 }))
 
 vi.mock("@/components/StatsSidePanel", () => ({
-  StatsSidePanel: () => null,
+  StatsSidePanel: () => <div>Statistics Panel</div>,
 }))
 
 vi.mock("@/components/FileExplorer", () => ({
@@ -324,12 +336,21 @@ vi.mock("sonner", () => ({
 describe("router hydration", () => {
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
   })
 
   beforeEach(() => {
+    class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock)
     vi.resetModules()
     window.location.hash = "#/"
     window.sessionStorage.clear()
+    window.localStorage.clear()
     mocks.clearError.mockReset()
     mocks.markDirty.mockReset()
     mocks.openFile.mockReset()
@@ -433,16 +454,21 @@ describe("router hydration", () => {
 
     expect(sidebarPanel.getAttribute("data-state")).toBe("open")
     expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("expanded")
+    const resizeHandle = screen.getByRole("separator", { name: "Resize File Explorer" })
+    expect(resizeHandle.className).toContain("bg-transparent")
+    expect(resizeHandle.childElementCount).toBe(0)
 
     fireEvent.click(screen.getByRole("button", { name: "Close Sidebar" }))
 
     expect(sidebarPanel.getAttribute("data-state")).toBe("closed")
     expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("collapsed")
+    expect(screen.queryByRole("separator", { name: "Resize File Explorer" })).toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "Toggle Sidebar" }))
 
     expect(sidebarPanel.getAttribute("data-state")).toBe("open")
     expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("expanded")
+    expect(screen.getByRole("separator", { name: "Resize File Explorer" })).not.toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "Open Script from Tree" }))
 
@@ -452,5 +478,57 @@ describe("router hydration", () => {
 
     expect(screen.getByText("Toolbar: script.fountain")).not.toBeNull()
     expect(screen.getByText(new RegExp(mocks.clickedText))).not.toBeNull()
+  })
+
+  it("shows statistics as an exclusive editor view", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    const { container } = render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    expect(container.querySelector("#editor-file-explorer-layout")).not.toBeNull()
+    expect(screen.queryByText("Statistics Panel")).toBeNull()
+    expect(screen.getByTestId("toolbar-statistics-state").textContent).toBe("inactive")
+
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }))
+
+    expect(screen.getByText("Statistics Panel")).not.toBeNull()
+    expect(container.querySelector("#editor-file-explorer-layout")).toBeNull()
+    expect(screen.queryByText(new RegExp(mocks.restoredText))).toBeNull()
+    expect(screen.getByTestId("toolbar-statistics-state").textContent).toBe("active")
+  })
+
+  it("restores the persisted file explorer width on editor load", async () => {
+    window.location.hash = "#/editor"
+    window.localStorage.setItem("slate.editor.fileExplorerWidth.v1", "360")
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    const sidebarPanel = screen.getByTestId("file-explorer-panel")
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("open")
+    expect(sidebarPanel.getAttribute("data-sidebar-default-width")).toBe("360")
+    expect(screen.getByRole("separator", { name: "Resize File Explorer" })).not.toBeNull()
   })
 })

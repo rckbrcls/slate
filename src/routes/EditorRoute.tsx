@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { useNavigate } from "@tanstack/react-router"
+import { usePanelRef, type PanelSize } from "react-resizable-panels"
 import { Editor } from "@/components/Editor"
 import { ScreenplayPageStack } from "@/components/ScreenplayPageStack"
 import { Toolbar } from "@/components/Toolbar"
@@ -10,12 +11,13 @@ import { TitlePageView } from "@/components/TitlePageView"
 import { StatsSidePanel } from "@/components/StatsSidePanel"
 import { FileExplorer } from "@/components/FileExplorer"
 import { GitHistory } from "@/components/GitHistory"
-import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useFileExplorer } from "@/hooks/useFileExplorer"
 import { useProjectStore } from "@/hooks/useProjectStore"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useDocument } from "@/hooks/useDocument"
 import { useGit } from "@/hooks/useGit"
 import { pageNumbersPluginKey } from "@/extensions/PageNumbers"
@@ -46,6 +48,46 @@ function deriveProjectDir(filePath: string | null) {
 
 const SCREENPLAY_EXTENSIONS = new Set(["fountain", "spmd"])
 type EditorView = "editor" | "statistics"
+const FILE_EXPLORER_DEFAULT_WIDTH = 250
+const FILE_EXPLORER_MIN_WIDTH = 220
+const FILE_EXPLORER_MAX_WIDTH = 420
+const FILE_EXPLORER_WIDTH_STORAGE_KEY = "slate.editor.fileExplorerWidth.v1"
+
+function clampFileExplorerWidth(width: number) {
+  return Math.min(
+    FILE_EXPLORER_MAX_WIDTH,
+    Math.max(FILE_EXPLORER_MIN_WIDTH, Math.round(width)),
+  )
+}
+
+function readStoredFileExplorerWidth() {
+  if (typeof window === "undefined") return FILE_EXPLORER_DEFAULT_WIDTH
+
+  try {
+    const storedWidth = window.localStorage.getItem(FILE_EXPLORER_WIDTH_STORAGE_KEY)
+    if (!storedWidth) return FILE_EXPLORER_DEFAULT_WIDTH
+
+    const parsedWidth = Number(storedWidth)
+    if (!Number.isFinite(parsedWidth)) return FILE_EXPLORER_DEFAULT_WIDTH
+
+    return clampFileExplorerWidth(parsedWidth)
+  } catch {
+    return FILE_EXPLORER_DEFAULT_WIDTH
+  }
+}
+
+function writeStoredFileExplorerWidth(width: number) {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(
+      FILE_EXPLORER_WIDTH_STORAGE_KEY,
+      String(clampFileExplorerWidth(width)),
+    )
+  } catch {
+    // Local storage is best-effort; resizing should keep working without it.
+  }
+}
 
 async function findDefaultScreenplayFile(projectDir: string) {
   try {
@@ -76,6 +118,9 @@ export function EditorRoute() {
   const initialSession = initialSessionRef.current
   const canRestoreSession = hasEditorSession(initialSession)
   const editorRef = useRef<TiptapEditor | null>(null)
+  const fileExplorerPanelRef = usePanelRef()
+  const initialFileExplorerWidthRef = useRef(readStoredFileExplorerWidth())
+  const fileExplorerWidthRef = useRef(initialFileExplorerWidthRef.current)
   const isRouteMountedRef = useRef(true)
   const pendingFileRef = useRef<string | null>(initialSession?.filePath ?? null)
   const restoreAttemptedRef = useRef(false)
@@ -134,11 +179,44 @@ export function EditorRoute() {
     updateStats()
   }, [consumeProgrammaticContentUpdate, markDirty, updateStats])
 
+  const handleToggleFileExplorer = useCallback(() => {
+    setShowFileExplorer((visible) => !visible)
+  }, [])
+
+  const handleCloseFileExplorer = useCallback(() => {
+    setShowFileExplorer(false)
+  }, [])
+
+  const handleFileExplorerResize = useCallback((panelSize: PanelSize) => {
+    if (panelSize.inPixels <= 0) return
+
+    const nextWidth = clampFileExplorerWidth(panelSize.inPixels)
+    fileExplorerWidthRef.current = nextWidth
+    writeStoredFileExplorerWidth(nextWidth)
+  }, [])
+
   useEffect(() => {
     return () => {
       isRouteMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    const panel = fileExplorerPanelRef.current
+    if (!panel) return
+
+    const timeoutId = window.setTimeout(() => {
+      if (showFileExplorer) {
+        panel.expand()
+        panel.resize(fileExplorerWidthRef.current)
+        return
+      }
+
+      panel.collapse()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [fileExplorerPanelRef, showFileExplorer])
 
   useEffect(() => {
     if (!canRestoreSession) {
@@ -419,7 +497,7 @@ export function EditorRoute() {
           setActiveView((view) => (view === "statistics" ? "editor" : "statistics"))
         }
         showStats={activeView === "statistics"}
-        onToggleFileExplorer={() => setShowFileExplorer((visible) => !visible)}
+        onToggleFileExplorer={handleToggleFileExplorer}
         showFileExplorer={showFileExplorer}
         onSetScreenplayElement={handleSetScreenplayElement}
         onInsertPageBreak={handleInsertPageBreak}
@@ -465,69 +543,95 @@ export function EditorRoute() {
         </Alert>
       )}
 
-      <Collapsible
-        open={showFileExplorer}
-        onOpenChange={setShowFileExplorer}
-        className={
-          activeView === "editor"
-            ? "flex min-h-0 flex-1 overflow-hidden px-3 pb-3 pt-3"
-            : "hidden min-h-0 flex-1 overflow-hidden"
-        }
-      >
-        <CollapsibleContent
-          forceMount
-          data-testid="file-explorer-panel"
-          className="flex h-full shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card transition-[width,opacity,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:w-0 data-[state=closed]:-translate-x-4 data-[state=closed]:border-0 data-[state=closed]:opacity-0 data-[state=open]:w-[250px] data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
+      {activeView === "editor" && (
+        <ResizablePanelGroup
+          id="editor-file-explorer-layout"
+          orientation="horizontal"
+          resizeTargetMinimumSize={{ coarse: 28, fine: 8 }}
+          className="flex min-h-0 flex-1 overflow-hidden px-3"
         >
-          <div className="flex h-full w-[250px] shrink-0 flex-col overflow-hidden rounded-xl">
-            <FileExplorer
-              tree={fileExplorer.tree}
-              projectDir={fileExplorer.projectDir}
-              loading={fileExplorer.loading}
-              onToggleFolder={fileExplorer.toggleFolder}
-              onOpenFile={handleOpenFilePath}
-              currentFilePath={filePath}
-              gitStatus={git.isRepo ? git.status : undefined}
-              headerAction={
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Close Sidebar"
-                  title="Close Sidebar"
-                  onClick={() => setShowFileExplorer(false)}
-                  className="-mr-1 text-muted-foreground hover:text-foreground"
-                >
-                  <ChevronLeft className="size-3.5" />
-                </Button>
-              }
-            />
-            {git.isRepo && <GitHistory log={git.log} currentFile={filePath} />}
-          </div>
-        </CollapsibleContent>
+          <ResizablePanel
+            id="file-explorer-panel"
+            panelRef={fileExplorerPanelRef}
+            collapsible
+            collapsedSize={0}
+            defaultSize={initialFileExplorerWidthRef.current}
+            minSize={FILE_EXPLORER_MIN_WIDTH}
+            maxSize={FILE_EXPLORER_MAX_WIDTH}
+            groupResizeBehavior="preserve-pixel-size"
+            onResize={handleFileExplorerResize}
+            data-state={showFileExplorer ? "open" : "closed"}
+            data-sidebar-default-width={initialFileExplorerWidthRef.current}
+            className="min-w-0"
+          >
+            <div className="flex h-full min-w-0 py-3">
+              <div
+                data-state={showFileExplorer ? "open" : "closed"}
+                className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-card transition-[opacity,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:-translate-x-3 data-[state=closed]:border-transparent data-[state=closed]:opacity-0 data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
+              >
+                <FileExplorer
+                  tree={fileExplorer.tree}
+                  projectDir={fileExplorer.projectDir}
+                  loading={fileExplorer.loading}
+                  onToggleFolder={fileExplorer.toggleFolder}
+                  onOpenFile={handleOpenFilePath}
+                  currentFilePath={filePath}
+                  gitStatus={git.isRepo ? git.status : undefined}
+                  headerAction={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Close Sidebar"
+                      title="Close Sidebar"
+                      onClick={handleCloseFileExplorer}
+                      className="-mr-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </Button>
+                  }
+                />
+                {git.isRepo && <GitHistory log={git.log} currentFile={filePath} />}
+              </div>
+            </div>
+          </ResizablePanel>
 
-        <main className="relative flex min-h-0 flex-1 justify-center overflow-auto bg-background p-8">
-          {showTitlePage && (
-            <TitlePageView
-              titlePage={titlePage}
-              visible={showTitlePage}
-              onClose={() => setShowTitlePage(false)}
-            />
-          )}
-          <ScreenplayPageStack totalPages={visualPageCount} hidden={showTitlePage}>
-            <Editor
-              onUpdate={handleUpdate}
-              onPaginationUpdate={updateStats}
-              onEditorReady={handleEditorReady}
-              onEditorDestroy={handleEditorDestroy}
-            />
-          </ScreenplayPageStack>
-        </main>
+          <ResizableHandle
+            id="file-explorer-resize-handle"
+            aria-label="Resize File Explorer"
+            aria-hidden={!showFileExplorer}
+            disabled={!showFileExplorer}
+            withHandle={false}
+            className={cn(
+              "relative z-10 -mx-1 w-2 bg-transparent transition-[opacity,width] duration-200 after:w-2 hover:bg-transparent",
+              !showFileExplorer && "pointer-events-none mx-0 w-0 opacity-0 after:w-0",
+            )}
+          />
 
-      </Collapsible>
+          <ResizablePanel id="editor-content-panel" minSize={0} className="min-w-0">
+            <main className="relative flex h-full min-h-0 w-full justify-center overflow-auto bg-background p-8">
+              {showTitlePage && (
+                <TitlePageView
+                  titlePage={titlePage}
+                  visible={showTitlePage}
+                  onClose={() => setShowTitlePage(false)}
+                />
+              )}
+              <ScreenplayPageStack totalPages={visualPageCount} hidden={showTitlePage}>
+                <Editor
+                  onUpdate={handleUpdate}
+                  onPaginationUpdate={updateStats}
+                  onEditorReady={handleEditorReady}
+                  onEditorDestroy={handleEditorDestroy}
+                />
+              </ScreenplayPageStack>
+            </main>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
 
       {activeView === "statistics" && (
-        <div className="flex min-h-0 flex-1 overflow-hidden px-3 pb-3 pt-3">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <StatsSidePanel
             editor={editorRef.current}
             stats={stats}
