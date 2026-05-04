@@ -91,7 +91,7 @@ Current screenplay node types include:
 | `synopsis` | Synopsis text. |
 | `note` | Author note. |
 
-The editor also registers behavior extensions such as `ScreenplayKeymap`, `ScreenplayAutocomplete`, `PageNumbers`, `AIDiff`, and `RevisionMark`.
+The editor also registers behavior extensions such as `ScreenplayKeymap`, `ScreenplayAutocomplete`, `PageNumbers`, and `RevisionMark`.
 
 ## Fountain Import Behavior
 

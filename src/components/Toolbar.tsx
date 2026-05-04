@@ -11,26 +11,45 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
 import {
+  AlignLeft,
+  ArrowRight,
   FilePlus,
   FolderOpen,
   Save,
   SaveAll,
   BookOpen,
   Download,
-  Bot,
   BarChart3,
-  FolderTree,
   Hash,
   Lock,
   Unlock,
   Palette,
   Home,
+  Clapperboard,
+  FileText,
+  MessageSquare,
+  Parentheses,
+  StickyNote,
+  Type,
+  User,
+  PanelLeft,
 } from "lucide-react"
 import { REVISION_COLORS, type RevisionColorIndex } from "@/extensions/RevisionMark"
 import { cn } from "@/lib/utils"
 
 const shouldReserveTrafficLightSpace =
   typeof navigator !== "undefined" && navigator.platform.includes("Mac")
+
+export type ScreenplayElementType =
+  | "sceneHeading"
+  | "action"
+  | "character"
+  | "dialogue"
+  | "parenthetical"
+  | "transition"
+  | "section"
+  | "synopsis"
+  | "note"
 
 interface ToolbarProps {
   fileName: string
@@ -43,11 +62,12 @@ interface ToolbarProps {
   hasTitlePage?: boolean
   onExportPDF?: () => void
   onExportFDX?: () => void
-  onToggleAI?: () => void
-  showAI?: boolean
   onOpenStats?: () => void
+  showStats?: boolean
   onToggleFileExplorer?: () => void
   showFileExplorer?: boolean
+  onSetScreenplayElement?: (element: ScreenplayElementType) => void
+  onInsertPageBreak?: () => void
   // Production mode
   productionMode?: boolean
   onAutoNumber?: () => void
@@ -70,7 +90,13 @@ function ToolbarButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" onClick={onClick} className="app-no-drag">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClick}
+          aria-label={title}
+          className="app-no-drag"
+        >
           {children}
         </Button>
       </TooltipTrigger>
@@ -90,11 +116,12 @@ export function Toolbar({
   hasTitlePage,
   onExportPDF,
   onExportFDX,
-  onToggleAI,
-  showAI,
   onOpenStats,
+  showStats,
   onToggleFileExplorer,
   showFileExplorer,
+  onSetScreenplayElement,
+  onInsertPageBreak,
   onAutoNumber,
   onLockScenes,
   onUnlockScenes,
@@ -105,70 +132,163 @@ export function Toolbar({
   return (
     <header
       className={cn(
-        "app-drag-region flex h-12 shrink-0 items-center gap-1 border-b border-border px-3",
+        "app-drag-region relative z-20 mx-3 mt-3 flex h-12 shrink-0 items-center gap-1 rounded-xl border border-border/70 bg-card/95 px-3 shadow-lg shadow-black/20 ring-1 ring-foreground/5",
         shouldReserveTrafficLightSpace && "pl-[88px]",
       )}
     >
       <div className="app-no-drag flex items-center gap-1">
-        {onCloseProject && (
+        {(onCloseProject || onToggleFileExplorer) && (
           <>
-            <ToolbarButton onClick={onCloseProject} title="Back to Projects">
-              <Home className="size-4" />
-            </ToolbarButton>
+            {onCloseProject && (
+              <ToolbarButton onClick={onCloseProject} title="Back to Projects">
+                <Home className="size-4" />
+              </ToolbarButton>
+            )}
+            {onToggleFileExplorer && (
+              <ToolbarButton onClick={onToggleFileExplorer} title="Toggle Sidebar">
+                <PanelLeft className={`size-4 ${showFileExplorer ? "text-primary" : ""}`} />
+              </ToolbarButton>
+            )}
             <Separator orientation="vertical" className="mx-1 h-5" />
           </>
         )}
-        <ToolbarButton onClick={onNew} title="New (⌘N)">
-          <FilePlus className="size-4" />
-        </ToolbarButton>
-        <ToolbarButton onClick={onOpen} title="Open (⌘O)">
-          <FolderOpen className="size-4" />
-        </ToolbarButton>
-        <ToolbarButton onClick={onSave} title="Save (⌘S)">
-          <Save className="size-4" />
-        </ToolbarButton>
-        <ToolbarButton onClick={onSaveAs} title="Save As (⌘⇧S)">
-          <SaveAll className="size-4" />
-        </ToolbarButton>
 
-        {hasTitlePage && onToggleTitlePage && (
-          <>
-            <Separator orientation="vertical" className="mx-1 h-5" />
-            <ToolbarButton onClick={onToggleTitlePage} title="Title Page">
-              <BookOpen className="size-4" />
-            </ToolbarButton>
-          </>
-        )}
-
-        {(onExportPDF || onExportFDX) && (
-          <>
-            <Separator orientation="vertical" className="mx-1 h-5" />
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm" className="app-no-drag">
-                      <Download className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Export</TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="start">
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-sm" className="app-no-drag">
+                  <FileText className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">File</TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuLabel>File</DropdownMenuLabel>
+            <DropdownMenuItem onClick={onNew}>
+              <FilePlus className="mr-2 size-3.5" />
+              New
+              <DropdownMenuShortcut>⌘N</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpen}>
+              <FolderOpen className="mr-2 size-3.5" />
+              Open
+              <DropdownMenuShortcut>⌘O</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onSave}>
+              <Save className="mr-2 size-3.5" />
+              Save
+              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onSaveAs}>
+              <SaveAll className="mr-2 size-3.5" />
+              Save As
+              <DropdownMenuShortcut>⇧⌘S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            {onToggleTitlePage && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onToggleTitlePage}>
+                  <BookOpen className="mr-2 size-3.5" />
+                  {hasTitlePage ? "Edit Title Page" : "Title Page"}
+                </DropdownMenuItem>
+              </>
+            )}
+            {(onExportPDF || onExportFDX) && (
+              <>
+                <DropdownMenuSeparator />
                 {onExportPDF && (
                   <DropdownMenuItem onClick={onExportPDF}>
-                    Export as PDF
+                    <Download className="mr-2 size-3.5" />
+                    Export PDF
                     <DropdownMenuShortcut>⌘E</DropdownMenuShortcut>
                   </DropdownMenuItem>
                 )}
                 {onExportFDX && (
                   <DropdownMenuItem onClick={onExportFDX}>
-                    Export as FDX (Final Draft)
+                    <Download className="mr-2 size-3.5" />
+                    Export FDX
                   </DropdownMenuItem>
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {(onSetScreenplayElement || onInsertPageBreak) && (
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon-sm" className="app-no-drag">
+                    <Clapperboard className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Script</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuLabel>Script Elements</DropdownMenuLabel>
+              {onSetScreenplayElement && (
+                <>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("sceneHeading")}>
+                    <Clapperboard className="mr-2 size-3.5" />
+                    Scene Heading
+                    <DropdownMenuShortcut>⇧Tab</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("action")}>
+                    <AlignLeft className="mr-2 size-3.5" />
+                    Action
+                    <DropdownMenuShortcut>Tab</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("character")}>
+                    <User className="mr-2 size-3.5" />
+                    Character
+                    <DropdownMenuShortcut>Tab</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("dialogue")}>
+                    <MessageSquare className="mr-2 size-3.5" />
+                    Dialogue
+                    <DropdownMenuShortcut>Enter</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("parenthetical")}>
+                    <Parentheses className="mr-2 size-3.5" />
+                    Parenthetical
+                    <DropdownMenuShortcut>(</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("transition")}>
+                    <ArrowRight className="mr-2 size-3.5" />
+                    Transition
+                    <DropdownMenuShortcut>⇧Tab</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("section")}>
+                    <Hash className="mr-2 size-3.5" />
+                    Section
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("synopsis")}>
+                    <Type className="mr-2 size-3.5" />
+                    Synopsis
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onSetScreenplayElement("note")}>
+                    <StickyNote className="mr-2 size-3.5" />
+                    Note
+                  </DropdownMenuItem>
+                </>
+              )}
+              {onInsertPageBreak && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={onInsertPageBreak}>
+                    <FileText className="mr-2 size-3.5" />
+                    Page Break
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
 
         {/* Production Mode Controls */}
@@ -259,19 +379,9 @@ export function Toolbar({
       </div>
 
       <div className="app-no-drag ml-auto flex items-center gap-1">
-        {onToggleFileExplorer && (
-          <ToolbarButton onClick={onToggleFileExplorer} title="File Explorer">
-            <FolderTree className={`size-4 ${showFileExplorer ? "text-primary" : ""}`} />
-          </ToolbarButton>
-        )}
         {onOpenStats && (
           <ToolbarButton onClick={onOpenStats} title="Statistics">
-            <BarChart3 className="size-4" />
-          </ToolbarButton>
-        )}
-        {onToggleAI && (
-          <ToolbarButton onClick={onToggleAI} title="AI Assistant">
-            <Bot className={`size-4 ${showAI ? "text-primary" : ""}`} />
+            <BarChart3 className={`size-4 ${showStats ? "text-primary" : ""}`} />
           </ToolbarButton>
         )}
       </div>

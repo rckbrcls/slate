@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/context-menu"
 import {
   Star,
-  Plus,
   FolderOpen,
   ArrowUpDown,
   FileText,
@@ -77,8 +76,8 @@ export function WelcomeScreen({
         </header>
 
         {/* Filters */}
-        <div className="mb-6 flex items-center gap-3">
-          <InputGroup className="flex-1">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <InputGroup className="min-w-[260px] flex-1">
             <InputGroupAddon>
               <Search className="size-4" />
             </InputGroupAddon>
@@ -88,6 +87,15 @@ export function WelcomeScreen({
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </InputGroup>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenFolder}
+            className="shrink-0"
+          >
+            <FolderOpen data-icon="inline-start" className="size-3.5" />
+            Open Folder
+          </Button>
           <ButtonGroup className="shrink-0">
             <Button
               variant={showFavoritesOnly ? "default" : "outline"}
@@ -118,18 +126,19 @@ export function WelcomeScreen({
               Loading projects...
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-4 p-1">
+            <div className="grid max-w-[760px] grid-cols-1 gap-3 p-1 sm:grid-cols-2 lg:grid-cols-3">
               {filteredProjects.map((project) => (
                 <ContextMenu key={project.path}>
                   <ContextMenuTrigger>
                     <Card
-                      className="group cursor-pointer transition-colors hover:bg-accent/50"
+                      size="sm"
+                      className="group min-h-[112px] cursor-pointer rounded-xl py-3 transition-colors hover:bg-accent/50"
                       onClick={() => onOpenProject(project)}
                     >
-                      <CardContent className="p-4">
+                      <CardContent className="p-3">
                         <div className="flex items-start justify-between">
                           <div className="min-w-0 flex-1">
-                            <h3 className="truncate font-medium">{project.name}</h3>
+                            <h3 className="truncate text-sm font-medium">{project.name}</h3>
                             {project.lastFile && (
                               <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted-foreground">
                                 <FileText className="size-3 shrink-0" />
@@ -174,22 +183,6 @@ export function WelcomeScreen({
                   </ContextMenuContent>
                 </ContextMenu>
               ))}
-
-              {/* Open Folder card */}
-              <Card
-                className="cursor-pointer border-dashed transition-colors hover:bg-accent/50"
-                onClick={onOpenFolder}
-              >
-                <CardContent className="flex flex-col items-center justify-center p-4 text-muted-foreground">
-                  <div className="mb-2 rounded-full bg-muted p-3">
-                    <Plus className="size-5" />
-                  </div>
-                  <span className="flex items-center gap-1.5 text-sm font-medium">
-                    <FolderOpen className="size-3.5" />
-                    Open Folder
-                  </span>
-                </CardContent>
-              </Card>
             </div>
           )}
         </ScrollArea>

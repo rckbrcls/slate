@@ -190,7 +190,27 @@ vi.mock("@/extensions/PageNumbers", () => ({
 }))
 
 vi.mock("@/components/Toolbar", () => ({
-  Toolbar: ({ fileName }: { fileName: string }) => <div>{`Toolbar: ${fileName}`}</div>,
+  Toolbar: ({
+    fileName,
+    onToggleFileExplorer,
+    showFileExplorer,
+  }: {
+    fileName: string
+    onToggleFileExplorer?: () => void
+    showFileExplorer?: boolean
+  }) => (
+    <div>
+      <div>{`Toolbar: ${fileName}`}</div>
+      {onToggleFileExplorer && (
+        <button type="button" onClick={onToggleFileExplorer}>
+          Toggle Sidebar
+        </button>
+      )}
+      <span data-testid="toolbar-sidebar-state">
+        {showFileExplorer ? "expanded" : "collapsed"}
+      </span>
+    </div>
+  ),
 }))
 
 vi.mock("@/components/Editor", async () => {
@@ -264,29 +284,29 @@ vi.mock("@/components/TitlePageView", () => ({
   TitlePageView: () => null,
 }))
 
-vi.mock("@/components/AISidePanel", () => ({
-  AISidePanel: () => null,
-}))
-
 vi.mock("@/components/StatsSidePanel", () => ({
   StatsSidePanel: () => null,
 }))
 
 vi.mock("@/components/FileExplorer", () => ({
-  FileExplorer: ({ onOpenFile }: { onOpenFile: (path: string) => void }) => (
-    <button type="button" onClick={() => void onOpenFile(mocks.clickedPath)}>
-      Open Script from Tree
-    </button>
+  FileExplorer: ({
+    onOpenFile,
+    headerAction,
+  }: {
+    onOpenFile: (path: string) => void
+    headerAction?: ReactNode
+  }) => (
+    <div>
+      {headerAction}
+      <button type="button" onClick={() => void onOpenFile(mocks.clickedPath)}>
+        Open Script from Tree
+      </button>
+    </div>
   ),
 }))
 
 vi.mock("@/components/GitHistory", () => ({
   GitHistory: () => null,
-}))
-
-vi.mock("@/components/ui/expandable-screen", () => ({
-  ExpandableScreen: ({ children }: { children: ReactNode }) => <>{children}</>,
-  ExpandableScreenContent: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
 vi.mock("@/components/WelcomeScreen", () => ({
@@ -391,5 +411,46 @@ describe("router hydration", () => {
     expect(screen.getByText("Toolbar: script.fountain")).not.toBeNull()
     expect(screen.getByText(new RegExp(mocks.clickedText))).not.toBeNull()
     expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(4)
+  })
+
+  it("collapses and reopens the file explorer without breaking tree file opens", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    const sidebarPanel = screen.getByTestId("file-explorer-panel")
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("open")
+    expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("expanded")
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Sidebar" }))
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("closed")
+    expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("collapsed")
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Sidebar" }))
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("open")
+    expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("expanded")
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Script from Tree" }))
+
+    await waitFor(() => {
+      expect(mocks.openFilePath).toHaveBeenCalledWith(mocks.clickedPath)
+    })
+
+    expect(screen.getByText("Toolbar: script.fountain")).not.toBeNull()
+    expect(screen.getByText(new RegExp(mocks.clickedText))).not.toBeNull()
   })
 })

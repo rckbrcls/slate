@@ -4,17 +4,18 @@ import { useNavigate } from "@tanstack/react-router"
 import { Editor } from "@/components/Editor"
 import { ScreenplayPageStack } from "@/components/ScreenplayPageStack"
 import { Toolbar } from "@/components/Toolbar"
+import type { ScreenplayElementType } from "@/components/Toolbar"
 import { StatsBar } from "@/components/StatsBar"
 import { TitlePageView } from "@/components/TitlePageView"
-import { AISidePanel } from "@/components/AISidePanel"
 import { StatsSidePanel } from "@/components/StatsSidePanel"
 import { FileExplorer } from "@/components/FileExplorer"
 import { GitHistory } from "@/components/GitHistory"
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
 import { useFileExplorer } from "@/hooks/useFileExplorer"
 import { useProjectStore } from "@/hooks/useProjectStore"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { ExpandableScreen, ExpandableScreenContent } from "@/components/ui/expandable-screen"
+import { ChevronLeft } from "lucide-react"
 import { useDocument } from "@/hooks/useDocument"
 import { useGit } from "@/hooks/useGit"
 import { pageNumbersPluginKey } from "@/extensions/PageNumbers"
@@ -44,6 +45,7 @@ function deriveProjectDir(filePath: string | null) {
 }
 
 const SCREENPLAY_EXTENSIONS = new Set(["fountain", "spmd"])
+type EditorView = "editor" | "statistics"
 
 async function findDefaultScreenplayFile(projectDir: string) {
   try {
@@ -84,8 +86,7 @@ export function EditorRoute() {
   const [stats, setStats] = useState<ScreenplayStats | null>(null)
   const [pagination, setPagination] = useState<PaginationResult | null>(null)
   const [showTitlePage, setShowTitlePage] = useState(false)
-  const [showAI, setShowAI] = useState(false)
-  const [showStats, setShowStats] = useState(false)
+  const [activeView, setActiveView] = useState<EditorView>("editor")
   const [showFileExplorer, setShowFileExplorer] = useState(true)
 
   const projectStore = useProjectStore()
@@ -375,6 +376,18 @@ export function EditorRoute() {
     toast.success("Scene numbers cleared")
   }, [])
 
+  const handleSetScreenplayElement = useCallback((element: ScreenplayElementType) => {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.chain().focus().setNode(element).run()
+  }, [])
+
+  const handleInsertPageBreak = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.chain().focus().insertContent({ type: "pageBreak" }).run()
+  }, [])
+
   const handleSetRevisionColor = useCallback((color: RevisionColorIndex) => {
     const editor = editorRef.current
     if (!editor) return
@@ -402,11 +415,14 @@ export function EditorRoute() {
         hasTitlePage={Object.keys(titlePage).length > 0}
         onExportPDF={handleExportPDF}
         onExportFDX={handleExportFDX}
-        onToggleAI={() => setShowAI(!showAI)}
-        showAI={showAI}
-        onOpenStats={() => setShowStats(true)}
-        onToggleFileExplorer={() => setShowFileExplorer(!showFileExplorer)}
+        onOpenStats={() =>
+          setActiveView((view) => (view === "statistics" ? "editor" : "statistics"))
+        }
+        showStats={activeView === "statistics"}
+        onToggleFileExplorer={() => setShowFileExplorer((visible) => !visible)}
         showFileExplorer={showFileExplorer}
+        onSetScreenplayElement={handleSetScreenplayElement}
+        onInsertPageBreak={handleInsertPageBreak}
         onAutoNumber={handleAutoNumber}
         onLockScenes={handleLockScenes}
         onUnlockScenes={handleUnlockScenes}
@@ -449,9 +465,21 @@ export function EditorRoute() {
         </Alert>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {showFileExplorer && (
-          <div className="flex w-[250px] shrink-0 flex-col border-r border-border">
+      <Collapsible
+        open={showFileExplorer}
+        onOpenChange={setShowFileExplorer}
+        className={
+          activeView === "editor"
+            ? "flex min-h-0 flex-1 overflow-hidden px-3 pb-3 pt-3"
+            : "hidden min-h-0 flex-1 overflow-hidden"
+        }
+      >
+        <CollapsibleContent
+          forceMount
+          data-testid="file-explorer-panel"
+          className="flex h-full shrink-0 overflow-hidden rounded-xl bg-card shadow-xl shadow-black/20 ring-1 ring-border/70 transition-[width,opacity,transform,margin-right,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:mr-0 data-[state=closed]:w-0 data-[state=closed]:-translate-x-4 data-[state=closed]:opacity-0 data-[state=closed]:shadow-none data-[state=closed]:ring-0 data-[state=open]:mr-3 data-[state=open]:w-[250px] data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
+        >
+          <div className="flex h-full w-[250px] shrink-0 flex-col overflow-hidden rounded-xl">
             <FileExplorer
               tree={fileExplorer.tree}
               projectDir={fileExplorer.projectDir}
@@ -460,12 +488,25 @@ export function EditorRoute() {
               onOpenFile={handleOpenFilePath}
               currentFilePath={filePath}
               gitStatus={git.isRepo ? git.status : undefined}
+              headerAction={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Close Sidebar"
+                  title="Close Sidebar"
+                  onClick={() => setShowFileExplorer(false)}
+                  className="-mr-1 text-muted-foreground hover:text-foreground"
+                >
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+              }
             />
             {git.isRepo && <GitHistory log={git.log} currentFile={filePath} />}
           </div>
-        )}
+        </CollapsibleContent>
 
-        <main className="relative flex flex-1 justify-center overflow-auto bg-muted/30 p-8">
+        <main className="relative flex min-h-0 flex-1 justify-center overflow-auto rounded-xl bg-muted/30 p-8">
           {showTitlePage && (
             <TitlePageView
               titlePage={titlePage}
@@ -483,31 +524,19 @@ export function EditorRoute() {
           </ScreenplayPageStack>
         </main>
 
-        {showAI && (
-          <div className="flex w-[350px] shrink-0 border-l border-border">
-            <AISidePanel
-              externalChangePending={externalChangePending}
-              onReloadFromDisk={() => void handleReloadFromDisk()}
-            />
-          </div>
-        )}
-      </div>
+      </Collapsible>
 
-      <ExpandableScreen
-        expanded={showStats}
-        onExpandChange={setShowStats}
-        layoutId="stats-overlay"
-      >
-        <ExpandableScreenContent className="bg-background" closeButtonClassName="text-foreground hover:bg-muted">
+      {activeView === "statistics" && (
+        <div className="flex min-h-0 flex-1 overflow-hidden px-3 pb-3 pt-3">
           <StatsSidePanel
             editor={editorRef.current}
             stats={stats}
             pagination={pagination}
           />
-        </ExpandableScreenContent>
-      </ExpandableScreen>
+        </div>
+      )}
 
-      <StatsBar stats={stats} />
+      {activeView === "editor" && <StatsBar stats={stats} />}
     </div>
   )
 }

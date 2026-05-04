@@ -21,7 +21,6 @@ import { Note } from "./Note"
 import { ScreenplayKeymap } from "./ScreenplayKeymap"
 import { ScreenplayAutocomplete } from "./ScreenplayAutocomplete"
 import { PageNumbers } from "./PageNumbers"
-import { AIDiff } from "./AIDiff"
 import { RevisionMark } from "./RevisionMark"
 
 export {
@@ -60,7 +59,6 @@ export const screenplayExtensions = [
   ScreenplayKeymap,
   ScreenplayAutocomplete,
   PageNumbers,
-  AIDiff,
   RevisionMark,
   Bold,
   Italic,
