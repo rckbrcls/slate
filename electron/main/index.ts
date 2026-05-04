@@ -135,6 +135,16 @@ function projectStoreFilePath() {
   return join(app.getPath("userData"), "slate-projects.json")
 }
 
+function rendererAssetPath(fileName: string) {
+  return app.isPackaged
+    ? join(__dirname, "../renderer", fileName)
+    : join(__dirname, "../../public", fileName)
+}
+
+function installApplicationIcon() {
+  app.dock?.setIcon(rendererAssetPath("slate.png"))
+}
+
 function isProjectEntry(value: unknown): value is ProjectEntry {
   if (!value || typeof value !== "object") return false
 
@@ -290,6 +300,7 @@ function createMainWindow() {
     minWidth: 960,
     minHeight: 640,
     title: "Slate",
+    icon: rendererAssetPath("slate.png"),
     ...macWindowOptions,
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
@@ -539,6 +550,7 @@ function registerIpcHandlers() {
 
 app.whenReady().then(() => {
   installSecurityDefaults()
+  installApplicationIcon()
   registerIpcHandlers()
   createMainWindow()
 

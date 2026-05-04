@@ -51,6 +51,10 @@ pnpm dist:linux
 - `productName: Slate`
 - output directory `release`
 - `asar: true`
+- application icon source `public/slate.png`
+- macOS icon `build/generated-icons/icon.icns`
+- Windows icon `build/generated-icons/icon.ico`
+- Linux icon `public/slate.png`
 - macOS `dmg`
 - Windows `nsis`
 - Linux `AppImage`
@@ -59,7 +63,6 @@ pnpm dist:linux
 
 Before distributing public builds, decide and implement:
 
-- Application icon assets for all platforms.
 - Versioning policy.
 - macOS signing and notarization.
 - Windows code signing.

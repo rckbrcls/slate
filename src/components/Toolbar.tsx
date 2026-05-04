@@ -132,7 +132,7 @@ export function Toolbar({
   return (
     <header
       className={cn(
-        "app-drag-region relative z-20 mx-3 mt-3 flex h-12 shrink-0 items-center gap-1 rounded-xl border border-border/70 bg-card/95 px-3 shadow-lg shadow-black/20 ring-1 ring-foreground/5",
+        "app-drag-region relative z-20 flex h-12 shrink-0 items-center gap-1 rounded-b-xl border border-t-0 border-border/70 bg-card/95 px-3",
         shouldReserveTrafficLightSpace && "pl-[88px]",
       )}
     >

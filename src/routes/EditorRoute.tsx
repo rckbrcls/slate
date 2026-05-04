@@ -477,7 +477,7 @@ export function EditorRoute() {
         <CollapsibleContent
           forceMount
           data-testid="file-explorer-panel"
-          className="flex h-full shrink-0 overflow-hidden rounded-xl bg-card shadow-xl shadow-black/20 ring-1 ring-border/70 transition-[width,opacity,transform,margin-right,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:mr-0 data-[state=closed]:w-0 data-[state=closed]:-translate-x-4 data-[state=closed]:opacity-0 data-[state=closed]:shadow-none data-[state=closed]:ring-0 data-[state=open]:mr-3 data-[state=open]:w-[250px] data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
+          className="flex h-full shrink-0 overflow-hidden rounded-xl border border-border/70 bg-card transition-[width,opacity,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:w-0 data-[state=closed]:-translate-x-4 data-[state=closed]:border-0 data-[state=closed]:opacity-0 data-[state=open]:w-[250px] data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
         >
           <div className="flex h-full w-[250px] shrink-0 flex-col overflow-hidden rounded-xl">
             <FileExplorer
@@ -506,7 +506,7 @@ export function EditorRoute() {
           </div>
         </CollapsibleContent>
 
-        <main className="relative flex min-h-0 flex-1 justify-center overflow-auto rounded-xl bg-muted/30 p-8">
+        <main className="relative flex min-h-0 flex-1 justify-center overflow-auto bg-background p-8">
           {showTitlePage && (
             <TitlePageView
               titlePage={titlePage}
