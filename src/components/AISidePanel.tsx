@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
@@ -91,31 +92,32 @@ export function AISidePanel({
       <ScrollArea className="flex-1">
         <div className="space-y-3 p-3">
           {externalChangePending && (
-            <Card className="border-amber-500/30 bg-amber-500/5">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Disk Update Waiting</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <p className="text-xs text-muted-foreground">
+            <Alert>
+              <RefreshCw className="size-4" />
+              <AlertTitle>Disk Update Waiting</AlertTitle>
+              <AlertDescription className="space-y-3">
+                <p className="text-xs">
                   The file changed on disk while you still had unsaved edits in the editor.
                 </p>
                 <Button size="sm" onClick={onReloadFromDisk} className="w-full">
                   <RefreshCw className="mr-1 size-3.5" />
                   Reload from Disk
                 </Button>
-              </CardContent>
-            </Card>
+              </AlertDescription>
+            </Alert>
           )}
 
-          <div className="rounded-md border border-border bg-muted/30 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Terminal className="size-4 text-muted-foreground" />
-              Claude Code
-            </div>
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              Run Claude Code in your terminal to edit this screenplay. Disk changes will sync here automatically when the editor is clean.
-            </p>
-          </div>
+          <Card className="p-0">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Terminal className="size-4 text-muted-foreground" />
+                Claude Code
+              </div>
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Run Claude Code in your terminal to edit this screenplay. Disk changes will sync here automatically when the editor is clean.
+              </p>
+            </CardContent>
+          </Card>
 
           <Separator />
 

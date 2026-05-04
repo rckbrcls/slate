@@ -103,14 +103,14 @@ export const AIDiff = Extension.create({
                 decorations.push(
                   Decoration.inline(from, to, {
                     class: "ai-diff-added",
-                    style: "background-color: rgba(34, 197, 94, 0.15); border-bottom: 2px solid rgb(34, 197, 94);",
+                    style: "background-color: color-mix(in oklab, var(--primary) 18%, transparent); border-bottom: 2px solid var(--primary);",
                   }),
                 )
               } else {
                 decorations.push(
                   Decoration.inline(from, to, {
                     class: "ai-diff-removed",
-                    style: "background-color: rgba(239, 68, 68, 0.15); text-decoration: line-through; border-bottom: 2px solid rgb(239, 68, 68);",
+                    style: "background-color: color-mix(in oklab, var(--destructive) 18%, transparent); text-decoration: line-through; border-bottom: 2px solid var(--destructive);",
                   }),
                 )
               }

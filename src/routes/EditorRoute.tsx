@@ -12,6 +12,8 @@ import { FileExplorer } from "@/components/FileExplorer"
 import { GitHistory } from "@/components/GitHistory"
 import { useFileExplorer } from "@/hooks/useFileExplorer"
 import { useProjectStore } from "@/hooks/useProjectStore"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { ExpandableScreen, ExpandableScreenContent } from "@/components/ui/expandable-screen"
 import { useDocument } from "@/hooks/useDocument"
 import { useGit } from "@/hooks/useGit"
@@ -414,29 +416,37 @@ export function EditorRoute() {
       />
 
       {error && (
-        <div className="flex items-center gap-2 bg-destructive/10 px-3 py-1.5 text-sm text-destructive">
-          <span>{error}</span>
-          <button
-            type="button"
-            onClick={clearError}
-            className="ml-auto text-xs underline"
-          >
-            Dismiss
-          </button>
-        </div>
+        <Alert variant="destructive" className="rounded-none border-x-0 border-t-0 px-3 py-2">
+          <AlertDescription className="flex items-center gap-2">
+            <span>{error}</span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={clearError}
+              className="ml-auto text-destructive hover:text-destructive"
+            >
+              Dismiss
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       {externalChangePending && (
-        <div className="flex items-center gap-2 bg-amber-500/10 px-3 py-1.5 text-sm text-amber-200">
-          <span>Disk changes are waiting because you still have unsaved edits.</span>
-          <button
-            type="button"
-            onClick={() => void handleReloadFromDisk()}
-            className="ml-auto text-xs underline"
-          >
-            Reload from Disk
-          </button>
-        </div>
+        <Alert className="rounded-none border-x-0 border-t-0 px-3 py-2">
+          <AlertDescription className="flex items-center gap-2">
+            <span>Disk changes are waiting because you still have unsaved edits.</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={() => void handleReloadFromDisk()}
+              className="ml-auto"
+            >
+              Reload from Disk
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-1 overflow-hidden">

@@ -25,9 +25,9 @@ const FOUNTAIN_EXTS = new Set(["fountain", "spmd"])
 
 function getFileIcon(name: string) {
   const ext = name.split(".").pop()?.toLowerCase() ?? ""
-  if (FOUNTAIN_EXTS.has(ext)) return <FileCode className="size-4 text-amber-400 shrink-0" />
-  if (ext === "pdf") return <FileText className="size-4 text-red-400 shrink-0" />
-  if (ext === "fdx") return <FileText className="size-4 text-blue-400 shrink-0" />
+  if (FOUNTAIN_EXTS.has(ext)) return <FileCode className="size-4 shrink-0 text-primary" />
+  if (ext === "pdf") return <FileText className="size-4 shrink-0 text-destructive" />
+  if (ext === "fdx") return <FileText className="size-4 shrink-0 text-chart-2" />
   return <File className="size-4 text-muted-foreground shrink-0" />
 }
 
@@ -37,11 +37,11 @@ function getGitBadge(filePath: string, gitStatus?: GitFileStatus[]) {
   if (!entry) return null
 
   const badges: Record<string, { label: string; className: string }> = {
-    modified: { label: "M", className: "text-orange-400" },
-    added: { label: "A", className: "text-green-400" },
-    deleted: { label: "D", className: "text-red-400" },
+    modified: { label: "M", className: "text-primary" },
+    added: { label: "A", className: "text-chart-2" },
+    deleted: { label: "D", className: "text-destructive" },
     untracked: { label: "?", className: "text-muted-foreground" },
-    staged: { label: "S", className: "text-green-400" },
+    staged: { label: "S", className: "text-chart-2" },
   }
   const badge = badges[entry.status]
   if (!badge) return null
@@ -95,7 +95,7 @@ const FileTreeNode = memo(function FileTreeNode({
             ) : (
               <ChevronRight className="size-3.5 shrink-0" />
             )}
-            <Folder className={`size-4 shrink-0 ${node.expanded ? "text-amber-400" : "text-muted-foreground"}`} />
+            <Folder className={`size-4 shrink-0 ${node.expanded ? "text-primary" : "text-muted-foreground"}`} />
           </>
         ) : (
           <>

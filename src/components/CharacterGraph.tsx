@@ -83,7 +83,7 @@ export function CharacterGraph({ cooccurrence, characters }: CharacterGraphProps
       .selectAll("line")
       .data(links)
       .join("line")
-      .attr("stroke", "#4b5563")
+      .attr("stroke", "var(--border)")
       .attr("stroke-opacity", 0.5)
       .attr("stroke-width", (d) => 1 + (d.weight / maxWeight) * 4)
 
@@ -94,9 +94,9 @@ export function CharacterGraph({ cooccurrence, characters }: CharacterGraphProps
       .data(nodes)
       .join("circle")
       .attr("r", (d) => 6 + (d.wordCount / maxWords) * 14)
-      .attr("fill", "#6366f1")
+      .attr("fill", "var(--primary)")
       .attr("fill-opacity", 0.7)
-      .attr("stroke", "#818cf8")
+      .attr("stroke", "var(--ring)")
       .attr("stroke-width", 1.5)
 
     // Labels
@@ -107,7 +107,7 @@ export function CharacterGraph({ cooccurrence, characters }: CharacterGraphProps
       .join("text")
       .text((d) => d.id)
       .attr("font-size", 9)
-      .attr("fill", "#d1d5db")
+      .attr("fill", "var(--muted-foreground)")
       .attr("text-anchor", "middle")
       .attr("dy", (d) => -(10 + (d.wordCount / maxWords) * 14))
 

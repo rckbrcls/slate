@@ -38,7 +38,7 @@
   min-height: 11in;
   padding: 1in 1in 1in 1.5in;
   background: white;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 24px color-mix(in oklab, var(--foreground) 15%, transparent);
   border-radius: 2px;
   overflow-x: hidden;
 }
@@ -61,7 +61,7 @@
   width: var(--page-width);
   height: var(--page-height);
   background: white;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 24px color-mix(in oklab, var(--foreground) 15%, transparent);
   border-radius: 2px;
   overflow: hidden;
 }
@@ -72,7 +72,7 @@
   right: 0.75in;
   font-family: "Courier Prime", "Courier New", Courier, monospace;
   font-size: 10pt;
-  color: #94a3b8;
+  color: var(--muted-foreground);
 }
 
 .screenplay-editor-shell {
@@ -205,31 +205,31 @@
 /* Section (outline/structure) */
 .screenplay-editor [data-type="section"] {
   font-weight: 700;
-  color: #4a5568;
-  background: #f7fafc;
+  color: var(--foreground);
+  background: var(--muted);
   padding: 0.25em 0.5em;
-  border-left: 3px solid #4a5568;
+  border-left: 3px solid var(--border);
   margin-top: 1em;
   margin-bottom: 0.5em;
 }
 
 /* Synopsis */
 .screenplay-editor [data-type="synopsis"] {
-  color: #718096;
+  color: var(--muted-foreground);
   font-style: italic;
-  background: #fffbeb;
+  background: color-mix(in oklab, var(--primary) 12%, var(--background));
   padding: 0.25em 0.5em;
-  border-left: 3px solid #ecc94b;
+  border-left: 3px solid var(--primary);
   margin-top: 0.25em;
   margin-bottom: 0.25em;
 }
 
 /* Note */
 .screenplay-editor [data-type="note"] {
-  color: #718096;
-  background: #ebf8ff;
+  color: var(--muted-foreground);
+  background: var(--accent);
   padding: 0.25em 0.5em;
-  border-left: 3px solid #63b3ed;
+  border-left: 3px solid var(--ring);
   margin-top: 0.25em;
   margin-bottom: 0.25em;
   font-size: 10pt;
@@ -257,7 +257,7 @@
 /* Placeholder styles */
 .screenplay-editor .is-empty::before {
   content: attr(data-placeholder);
-  color: #a0aec0;
+  color: var(--muted-foreground);
   pointer-events: none;
   position: absolute;
   height: 0;
@@ -287,7 +287,7 @@
   transform: translateX(-50%);
   font-family: "Courier Prime", "Courier New", Courier, monospace;
   font-size: 12pt;
-  color: #64748b;
+  color: var(--muted-foreground);
 }
 
 .screenplay-contd-indicator {
@@ -296,7 +296,7 @@
   bottom: calc(var(--page-gap) + 0.35in);
   font-family: "Courier Prime", "Courier New", Courier, monospace;
   font-size: 12pt;
-  color: #64748b;
+  color: var(--muted-foreground);
 }
 
 /* Scene Numbers (Production Mode) */

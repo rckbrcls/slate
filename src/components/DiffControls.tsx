@@ -16,10 +16,10 @@ export function DiffControls({ hunkCount, onAcceptAll, onRejectAll }: DiffContro
         {hunkCount} changes
       </Badge>
       <Button variant="ghost" size="icon-sm" onClick={onAcceptAll} title="Accept All">
-        <Check className="size-4 text-green-500" />
+        <Check className="size-4 text-primary" />
       </Button>
       <Button variant="ghost" size="icon-sm" onClick={onRejectAll} title="Reject All">
-        <X className="size-4 text-red-500" />
+        <X className="size-4 text-destructive" />
       </Button>
     </Card>
   )

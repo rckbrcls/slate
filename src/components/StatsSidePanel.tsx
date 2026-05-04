@@ -14,6 +14,12 @@ import { mapBeatsToPages } from "@/lib/analytics/beatsheet"
 import type { ScreenplayStats } from "@/lib/stats"
 import type { PaginationResult } from "@/lib/pagination"
 
+const ACT_COLORS: Record<number, string> = {
+  1: "var(--chart-1)",
+  2: "var(--chart-3)",
+  3: "var(--chart-5)",
+}
+
 interface StatsSidePanelProps {
   editor: Editor | null
   stats: ScreenplayStats | null
@@ -172,8 +178,7 @@ export function StatsSidePanel({ editor, stats, pagination }: StatsSidePanelProp
                       <span
                         className="mr-1.5 inline-block size-2 rounded-full"
                         style={{
-                          backgroundColor:
-                            beat.act === 1 ? "#60a5fa" : beat.act === 2 ? "#4ade80" : "#f87171",
+                          backgroundColor: ACT_COLORS[beat.act] ?? "var(--muted-foreground)",
                         }}
                       />
                       {beat.name}

@@ -27,6 +27,10 @@ import {
   Home,
 } from "lucide-react"
 import { REVISION_COLORS, type RevisionColorIndex } from "@/extensions/RevisionMark"
+import { cn } from "@/lib/utils"
+
+const shouldReserveTrafficLightSpace =
+  typeof navigator !== "undefined" && navigator.platform.includes("Mac")
 
 interface ToolbarProps {
   fileName: string
@@ -66,7 +70,7 @@ function ToolbarButton({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="ghost" size="icon-sm" onClick={onClick}>
+        <Button variant="ghost" size="icon-sm" onClick={onClick} className="app-no-drag">
           {children}
         </Button>
       </TooltipTrigger>
@@ -99,8 +103,13 @@ export function Toolbar({
   onCloseProject,
 }: ToolbarProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border px-3">
-      <div className="flex items-center gap-1">
+    <header
+      className={cn(
+        "app-drag-region flex h-12 shrink-0 items-center gap-1 border-b border-border px-3",
+        shouldReserveTrafficLightSpace && "pl-[88px]",
+      )}
+    >
+      <div className="app-no-drag flex items-center gap-1">
         {onCloseProject && (
           <>
             <ToolbarButton onClick={onCloseProject} title="Back to Projects">
@@ -138,7 +147,7 @@ export function Toolbar({
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon-sm">
+                    <Button variant="ghost" size="icon-sm" className="app-no-drag">
                       <Download className="size-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -172,7 +181,7 @@ export function Toolbar({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm">
+                      <Button variant="ghost" size="icon-sm" className="app-no-drag">
                         <Hash className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -214,7 +223,7 @@ export function Toolbar({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm">
+                      <Button variant="ghost" size="icon-sm" className="app-no-drag">
                         <Palette className="size-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -245,11 +254,11 @@ export function Toolbar({
       <div className="ml-3 flex items-center gap-2 text-sm text-muted-foreground">
         <span className="font-medium text-foreground">{fileName}</span>
         {isDirty && (
-          <span className="size-2 rounded-full bg-orange-400" title="Unsaved changes" />
+          <span className="size-2 rounded-full bg-primary" title="Unsaved changes" />
         )}
       </div>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="app-no-drag ml-auto flex items-center gap-1">
         {onToggleFileExplorer && (
           <ToolbarButton onClick={onToggleFileExplorer} title="File Explorer">
             <FolderTree className={`size-4 ${showFileExplorer ? "text-primary" : ""}`} />

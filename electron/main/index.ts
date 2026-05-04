@@ -276,12 +276,21 @@ function installSecurityDefaults() {
 }
 
 function createMainWindow() {
+  const macWindowOptions =
+    process.platform === "darwin"
+      ? ({
+          titleBarStyle: "hiddenInset",
+          trafficLightPosition: { x: 16, y: 16 },
+        } as const)
+      : {}
+
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
     minWidth: 960,
     minHeight: 640,
     title: "Slate",
+    ...macWindowOptions,
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,

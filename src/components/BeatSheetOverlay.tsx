@@ -2,9 +2,9 @@ import { ReferenceLine, Label } from "recharts"
 import type { BeatMarker } from "@/lib/analytics/beatsheet"
 
 const ACT_COLORS: Record<number, string> = {
-  1: "#60a5fa", // blue
-  2: "#4ade80", // green
-  3: "#f87171", // red
+  1: "var(--chart-1)",
+  2: "var(--chart-3)",
+  3: "var(--chart-5)",
 }
 
 interface BeatSheetOverlayProps {

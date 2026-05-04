@@ -1,8 +1,13 @@
 import { useState, useMemo } from "react"
 import { formatDistanceToNow } from "date-fns"
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   ContextMenu,
@@ -63,50 +68,57 @@ export function WelcomeScreen({
   }, [projects, searchQuery, showFavoritesOnly, sortDirection])
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="relative flex h-screen flex-col bg-background text-foreground">
+      <div className="app-drag-region absolute inset-x-0 top-0 h-10" />
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-8 py-16">
         <header className="mb-12 text-center">
-          <h1 className="text-4xl font-bold tracking-tight">Slate</h1>
-          <p className="mt-2 text-muted-foreground">Screenplay Editor</p>
+          <h1 className="font-heading text-5xl font-medium text-foreground">Slate</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Screenplay Editor</p>
         </header>
 
         {/* Filters */}
         <div className="mb-6 flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
+          <InputGroup className="flex-1">
+            <InputGroupAddon>
+              <Search className="size-4" />
+            </InputGroupAddon>
+            <InputGroupInput
               placeholder="Search projects..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
             />
-          </div>
-          <Button
-            variant={showFavoritesOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-          >
-            <Star className={`mr-1.5 size-3.5 ${showFavoritesOnly ? "fill-current" : ""}`} />
-            Favorites
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSortDirection((d) => (d === "recent" ? "oldest" : "recent"))}
-          >
-            <ArrowUpDown className="mr-1.5 size-3.5" />
-            {sortDirection === "recent" ? "Newest" : "Oldest"}
-          </Button>
+          </InputGroup>
+          <ButtonGroup className="shrink-0">
+            <Button
+              variant={showFavoritesOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+            >
+              <Star
+                data-icon="inline-start"
+                className={`size-3.5 ${showFavoritesOnly ? "fill-current" : ""}`}
+              />
+              Favorites
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSortDirection((d) => (d === "recent" ? "oldest" : "recent"))}
+            >
+              <ArrowUpDown data-icon="inline-start" className="size-3.5" />
+              {sortDirection === "recent" ? "Newest" : "Oldest"}
+            </Button>
+          </ButtonGroup>
         </div>
 
         {/* Grid */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="-m-1 flex-1">
           {loading ? (
             <div className="flex items-center justify-center py-20 text-muted-foreground">
               Loading projects...
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-4 p-1">
               {filteredProjects.map((project) => (
                 <ContextMenu key={project.path}>
                   <ContextMenuTrigger>
@@ -128,18 +140,21 @@ export function WelcomeScreen({
                               {formatDistanceToNow(new Date(project.lastOpenedAt), { addSuffix: true })}
                             </p>
                           </div>
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon-sm"
                             onClick={(e) => {
                               e.stopPropagation()
                               onToggleFavorite(project.path)
                             }}
-                            className="ml-2 shrink-0 rounded p-1 text-muted-foreground hover:text-foreground"
+                            className="ml-2 shrink-0 text-muted-foreground hover:text-foreground"
+                            title={project.favorite ? "Unfavorite" : "Favorite"}
                           >
                             <Star
-                              className={`size-4 ${project.favorite ? "fill-yellow-400 text-yellow-400" : ""}`}
+                              className={`size-4 ${project.favorite ? "fill-current text-primary" : ""}`}
                             />
-                          </button>
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>

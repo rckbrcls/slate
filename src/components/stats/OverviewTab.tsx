@@ -253,10 +253,10 @@ export function OverviewTab({ stats, pacingData }: OverviewTabProps) {
                       value={health.score}
                       className={`h-2 ${
                         health.score >= 70
-                          ? "[&>[data-slot=indicator]]:bg-emerald-500"
+                          ? "[&>[data-slot=progress-indicator]]:bg-primary"
                           : health.score >= 40
-                            ? "[&>[data-slot=indicator]]:bg-amber-500"
-                            : "[&>[data-slot=indicator]]:bg-red-500"
+                            ? "[&>[data-slot=progress-indicator]]:bg-chart-3"
+                            : "[&>[data-slot=progress-indicator]]:bg-destructive"
                       }`}
                     />
                   </TooltipTrigger>

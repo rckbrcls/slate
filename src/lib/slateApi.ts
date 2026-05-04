@@ -1,9 +1,25 @@
+import { getMockSlateApi } from "@/lib/mockSlateApi"
+
+function canUseMockSlateApi() {
+  if (typeof window === "undefined" || !import.meta.env.DEV) return false
+
+  return (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === "::1"
+  )
+}
+
 export function getSlateApi() {
-  if (typeof window === "undefined" || !window.slate) {
-    throw new Error("Slate desktop API is unavailable")
+  if (typeof window !== "undefined" && window.slate) {
+    return window.slate
   }
 
-  return window.slate
+  if (canUseMockSlateApi()) {
+    return getMockSlateApi()
+  }
+
+  throw new Error("Slate desktop API is unavailable")
 }
 
 export function getPathName(filePath: string | null) {
