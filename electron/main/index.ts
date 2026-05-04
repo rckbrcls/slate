@@ -314,9 +314,9 @@ function createMainWindow() {
     console.error(`Slate renderer process exited: ${details.reason}`)
   })
 
-  mainWindow.webContents.on("console-message", (_event, level, message) => {
-    if (level >= 2) {
-      console.error(`Slate renderer: ${message}`)
+  mainWindow.webContents.on("console-message", (details) => {
+    if (details.level === "warning" || details.level === "error") {
+      console.error(`Slate renderer: ${details.message}`)
     }
   })
 
