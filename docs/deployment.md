@@ -18,7 +18,7 @@ Slate does not currently include:
 - Packager: `electron-builder`.
 - Bundle configuration: `electron-builder.yml`.
 - Main process entry: `electron/main/index.ts`.
-- Preload entry: `electron/preload/index.ts`.
+- Preload entry: `electron/preload/index.ts`, emitted as `out/preload/index.cjs`.
 - Renderer entry: `index.html` and `src/main.tsx`.
 
 ## Build

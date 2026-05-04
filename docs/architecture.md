@@ -67,6 +67,8 @@ Git is executed with `execFile("git", args, { cwd })`; no generic shell executio
 ### Preload
 
 `electron/preload/index.ts` exposes `window.slate` through `contextBridge`.
+The preload is bundled as CommonJS to `out/preload/index.cjs` because Slate runs
+the renderer with Electron sandboxing enabled.
 
 The public contract lives in:
 
