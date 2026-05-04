@@ -5,12 +5,19 @@ import { IPC_CHANNELS } from "./ipc"
 
 const mainSource = readFileSync(resolve("electron/main/index.ts"), "utf8")
 const preloadSource = readFileSync(resolve("electron/preload/index.ts"), "utf8")
+const electronViteConfigSource = readFileSync(resolve("electron.vite.config.ts"), "utf8")
 
 function ipcCallPattern(receiver: string, channelKey: string) {
   return new RegExp(`${receiver}\\(\\s*IPC_CHANNELS\\.${channelKey}\\b`)
 }
 
 describe("Electron IPC contract", () => {
+  it("keeps the sandboxed preload bundle CommonJS-only", () => {
+    expect(electronViteConfigSource).toContain('format: "cjs"')
+    expect(electronViteConfigSource).toContain('entryFileNames: "[name].cjs"')
+    expect(mainSource).toContain('preload: join(__dirname, "../preload/index.cjs")')
+  })
+
   it("uses unique Slate channel names", () => {
     const values = Object.values(IPC_CHANNELS)
 

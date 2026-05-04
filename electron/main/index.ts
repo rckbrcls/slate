@@ -283,7 +283,7 @@ function createMainWindow() {
     minHeight: 640,
     title: "Slate",
     webPreferences: {
-      preload: join(__dirname, "../preload/index.js"),
+      preload: join(__dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

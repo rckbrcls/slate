@@ -23,7 +23,7 @@ export default defineConfig({
         input: resolve(root, "electron/preload/index.ts"),
         output: {
           format: "cjs",
-          entryFileNames: "[name].js",
+          entryFileNames: "[name].cjs",
         },
       },
     },

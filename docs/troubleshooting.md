@@ -16,6 +16,7 @@ Common causes:
 - Dependencies are not installed. Run `pnpm install`.
 - Electron postinstall scripts were not approved by pnpm, so the Electron binary may be missing.
 - The preload path in `electron/main/index.ts` does not match the `electron-vite` output shape.
+- The sandboxed preload bundle is not being emitted as CommonJS at `out/preload/index.cjs`.
 - A TypeScript error prevents `electron-vite` from bundling main or preload code.
 
 ## Renderer-Only Mode Cannot Use Files
