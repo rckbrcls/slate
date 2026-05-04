@@ -33,8 +33,12 @@ import {
   Type,
   User,
   PanelLeft,
+  RotateCcw,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react"
 import { REVISION_COLORS, type RevisionColorIndex } from "@/extensions/RevisionMark"
+import { formatPaperZoomPercent } from "@/lib/paperZoom"
 import { cn } from "@/lib/utils"
 
 const shouldReserveTrafficLightSpace =
@@ -64,6 +68,13 @@ interface ToolbarProps {
   onExportFDX?: () => void
   onOpenStats?: () => void
   showStats?: boolean
+  paperZoom?: number
+  canZoomIn?: boolean
+  canZoomOut?: boolean
+  canResetZoom?: boolean
+  onZoomIn?: () => void
+  onZoomOut?: () => void
+  onResetZoom?: () => void
   onToggleFileExplorer?: () => void
   showFileExplorer?: boolean
   onSetScreenplayElement?: (element: ScreenplayElementType) => void
@@ -81,10 +92,12 @@ interface ToolbarProps {
 function ToolbarButton({
   onClick,
   title,
+  disabled = false,
   children,
 }: {
   onClick: () => void
   title: string
+  disabled?: boolean
   children: React.ReactNode
 }) {
   return (
@@ -94,6 +107,7 @@ function ToolbarButton({
           variant="ghost"
           size="icon-sm"
           onClick={onClick}
+          disabled={disabled}
           aria-label={title}
           className="app-no-drag"
         >
@@ -118,6 +132,13 @@ export function Toolbar({
   onExportFDX,
   onOpenStats,
   showStats,
+  paperZoom,
+  canZoomIn,
+  canZoomOut,
+  canResetZoom,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
   onToggleFileExplorer,
   showFileExplorer,
   onSetScreenplayElement,
@@ -379,6 +400,48 @@ export function Toolbar({
       </div>
 
       <div className="app-no-drag ml-auto flex items-center gap-1">
+        {typeof paperZoom === "number" && onZoomIn && onZoomOut && onResetZoom && (
+          <>
+            <div
+              className="flex h-8 items-center gap-px rounded-full border border-border/70 bg-muted/40 p-0.5"
+              aria-label="Paper Zoom"
+            >
+              <ToolbarButton
+                onClick={onZoomOut}
+                title="Zoom Out"
+                disabled={!canZoomOut}
+              >
+                <ZoomOut className="size-4" />
+              </ToolbarButton>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={onResetZoom}
+                    disabled={!canResetZoom}
+                    aria-label="Reset Zoom"
+                    className="app-no-drag h-7 min-w-16 px-2 font-mono text-xs tabular-nums"
+                  >
+                    <RotateCcw className="size-3.5" />
+                    {formatPaperZoomPercent(paperZoom)}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Reset Zoom</TooltipContent>
+              </Tooltip>
+              <ToolbarButton
+                onClick={onZoomIn}
+                title="Zoom In"
+                disabled={!canZoomIn}
+              >
+                <ZoomIn className="size-4" />
+              </ToolbarButton>
+            </div>
+            <Separator orientation="vertical" className="mx-1 h-5" />
+          </>
+        )}
+
         {onOpenStats && (
           <ToolbarButton onClick={onOpenStats} title="Statistics">
             <BarChart3 className={`size-4 ${showStats ? "text-primary" : ""}`} />

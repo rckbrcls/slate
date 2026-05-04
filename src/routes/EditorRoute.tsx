@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from "react"
+import { useEffect, useRef, useCallback, useState, type WheelEvent } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { useNavigate } from "@tanstack/react-router"
 import { usePanelRef, type PanelSize } from "react-resizable-panels"
@@ -40,6 +40,17 @@ import {
   readEditorSession,
   writeEditorSession,
 } from "@/lib/editorSession"
+import {
+  PAPER_ZOOM_DEFAULT,
+  PAPER_ZOOM_MAX,
+  PAPER_ZOOM_MIN,
+  PAPER_ZOOM_STORAGE_KEY,
+  clampPaperZoom,
+  getNextPaperZoomFromWheel,
+  resetPaperZoom,
+  shouldHandlePaperZoomWheel,
+  stepPaperZoom,
+} from "@/lib/paperZoom"
 import { toast } from "sonner"
 
 function deriveProjectDir(filePath: string | null) {
@@ -89,6 +100,30 @@ function writeStoredFileExplorerWidth(width: number) {
   }
 }
 
+function readStoredPaperZoom() {
+  if (typeof window === "undefined") return PAPER_ZOOM_DEFAULT
+
+  try {
+    const storedZoom = window.localStorage.getItem(PAPER_ZOOM_STORAGE_KEY)
+    if (!storedZoom) return PAPER_ZOOM_DEFAULT
+
+    const parsedZoom = Number(storedZoom)
+    return clampPaperZoom(parsedZoom)
+  } catch {
+    return PAPER_ZOOM_DEFAULT
+  }
+}
+
+function writeStoredPaperZoom(zoom: number) {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(PAPER_ZOOM_STORAGE_KEY, String(clampPaperZoom(zoom)))
+  } catch {
+    // Local storage is best-effort; paper zoom should keep working without it.
+  }
+}
+
 async function findDefaultScreenplayFile(projectDir: string) {
   try {
     const entries = await readDirectory(projectDir)
@@ -133,6 +168,7 @@ export function EditorRoute() {
   const [showTitlePage, setShowTitlePage] = useState(false)
   const [activeView, setActiveView] = useState<EditorView>("editor")
   const [showFileExplorer, setShowFileExplorer] = useState(true)
+  const [paperZoom, setPaperZoom] = useState(readStoredPaperZoom)
 
   const projectStore = useProjectStore()
   const { updateLastFile } = projectStore
@@ -160,6 +196,9 @@ export function EditorRoute() {
   const fileExplorer = useFileExplorer(filePath, activeProjectDir)
   const git = useGit(fileExplorer.projectDir)
   const visualPageCount = Math.max(pagination?.totalPages ?? 1, 1)
+  const canZoomIn = paperZoom < PAPER_ZOOM_MAX
+  const canZoomOut = paperZoom > PAPER_ZOOM_MIN
+  const canResetZoom = paperZoom !== PAPER_ZOOM_DEFAULT
 
   const updateStats = useCallback(() => {
     const editor = editorRef.current
@@ -195,11 +234,66 @@ export function EditorRoute() {
     writeStoredFileExplorerWidth(nextWidth)
   }, [])
 
+  const handleZoomIn = useCallback(() => {
+    setPaperZoom((currentZoom) => stepPaperZoom(currentZoom, 1))
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setPaperZoom((currentZoom) => stepPaperZoom(currentZoom, -1))
+  }, [])
+
+  const handleResetZoom = useCallback(() => {
+    setPaperZoom(resetPaperZoom())
+  }, [])
+
+  const handlePaperWheel = useCallback((event: WheelEvent<HTMLElement>) => {
+    if (!shouldHandlePaperZoomWheel(event)) return
+
+    const currentZoom = clampPaperZoom(paperZoom)
+    const nextZoom = getNextPaperZoomFromWheel(currentZoom, event.deltaY)
+    const scrollContainer = event.currentTarget
+    const viewportRect = scrollContainer.getBoundingClientRect()
+    const viewportX = event.clientX - viewportRect.left
+    const viewportY = event.clientY - viewportRect.top
+    const scrollLeft = scrollContainer.scrollLeft
+    const scrollTop = scrollContainer.scrollTop
+    const zoomFrame = scrollContainer.querySelector<HTMLElement>(".screenplay-zoom-frame")
+    const frameLeft = zoomFrame?.offsetLeft ?? 0
+    const frameTop = zoomFrame?.offsetTop ?? 0
+    const paperX = (scrollLeft + viewportX - frameLeft) / currentZoom
+    const paperY = (scrollTop + viewportY - frameTop) / currentZoom
+
+    event.preventDefault()
+
+    if (nextZoom === currentZoom) return
+
+    setPaperZoom(nextZoom)
+
+    const restoreScrollPosition = () => {
+      const nextFrameLeft = zoomFrame?.offsetLeft ?? frameLeft
+      const nextFrameTop = zoomFrame?.offsetTop ?? frameTop
+
+      scrollContainer.scrollLeft = paperX * nextZoom + nextFrameLeft - viewportX
+      scrollContainer.scrollTop = paperY * nextZoom + nextFrameTop - viewportY
+    }
+
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(restoreScrollPosition)
+      return
+    }
+
+    window.setTimeout(restoreScrollPosition, 0)
+  }, [paperZoom])
+
   useEffect(() => {
     return () => {
       isRouteMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    writeStoredPaperZoom(paperZoom)
+  }, [paperZoom])
 
   useEffect(() => {
     const panel = fileExplorerPanelRef.current
@@ -497,6 +591,13 @@ export function EditorRoute() {
           setActiveView((view) => (view === "statistics" ? "editor" : "statistics"))
         }
         showStats={activeView === "statistics"}
+        paperZoom={paperZoom}
+        canZoomIn={canZoomIn}
+        canZoomOut={canZoomOut}
+        canResetZoom={canResetZoom}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onResetZoom={handleResetZoom}
         onToggleFileExplorer={handleToggleFileExplorer}
         showFileExplorer={showFileExplorer}
         onSetScreenplayElement={handleSetScreenplayElement}
@@ -564,10 +665,10 @@ export function EditorRoute() {
             data-sidebar-default-width={initialFileExplorerWidthRef.current}
             className="min-w-0"
           >
-            <div className="flex h-full min-w-0 py-3">
+            <div className="flex h-full w-full min-w-0 py-3">
               <div
                 data-state={showFileExplorer ? "open" : "closed"}
-                className="flex h-full min-w-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-card transition-[opacity,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:-translate-x-3 data-[state=closed]:border-transparent data-[state=closed]:opacity-0 data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
+                className="flex h-full w-full min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/70 bg-card transition-[opacity,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:-translate-x-3 data-[state=closed]:border-transparent data-[state=closed]:opacity-0 data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
               >
                 <FileExplorer
                   tree={fileExplorer.tree}
@@ -603,13 +704,17 @@ export function EditorRoute() {
             disabled={!showFileExplorer}
             withHandle={false}
             className={cn(
-              "relative z-10 -mx-1 w-2 bg-transparent transition-[opacity,width] duration-200 after:w-2 hover:bg-transparent",
+              "mx-1 bg-transparent transition-[opacity,width] duration-200 after:w-2 hover:bg-transparent",
               !showFileExplorer && "pointer-events-none mx-0 w-0 opacity-0 after:w-0",
             )}
           />
 
           <ResizablePanel id="editor-content-panel" minSize={0} className="min-w-0">
-            <main className="relative flex h-full min-h-0 w-full justify-center overflow-auto bg-background p-8">
+            <main
+              data-testid="editor-paper-scroll-container"
+              className="relative h-full min-h-0 w-full overflow-auto bg-background p-8"
+              onWheel={handlePaperWheel}
+            >
               {showTitlePage && (
                 <TitlePageView
                   titlePage={titlePage}
@@ -617,14 +722,20 @@ export function EditorRoute() {
                   onClose={() => setShowTitlePage(false)}
                 />
               )}
-              <ScreenplayPageStack totalPages={visualPageCount} hidden={showTitlePage}>
-                <Editor
-                  onUpdate={handleUpdate}
-                  onPaginationUpdate={updateStats}
-                  onEditorReady={handleEditorReady}
-                  onEditorDestroy={handleEditorDestroy}
-                />
-              </ScreenplayPageStack>
+              <div className="flex w-max min-w-full justify-center">
+                <ScreenplayPageStack
+                  totalPages={visualPageCount}
+                  hidden={showTitlePage}
+                  zoom={paperZoom}
+                >
+                  <Editor
+                    onUpdate={handleUpdate}
+                    onPaginationUpdate={updateStats}
+                    onEditorReady={handleEditorReady}
+                    onEditorDestroy={handleEditorDestroy}
+                  />
+                </ScreenplayPageStack>
+              </div>
             </main>
           </ResizablePanel>
         </ResizablePanelGroup>

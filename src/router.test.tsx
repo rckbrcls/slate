@@ -196,12 +196,20 @@ vi.mock("@/components/Toolbar", () => ({
     showFileExplorer,
     onOpenStats,
     showStats,
+    paperZoom,
+    onZoomIn,
+    onZoomOut,
+    onResetZoom,
   }: {
     fileName: string
     onToggleFileExplorer?: () => void
     showFileExplorer?: boolean
     onOpenStats?: () => void
     showStats?: boolean
+    paperZoom?: number
+    onZoomIn?: () => void
+    onZoomOut?: () => void
+    onResetZoom?: () => void
   }) => (
     <div>
       <div>{`Toolbar: ${fileName}`}</div>
@@ -213,6 +221,22 @@ vi.mock("@/components/Toolbar", () => ({
       <span data-testid="toolbar-sidebar-state">
         {showFileExplorer ? "expanded" : "collapsed"}
       </span>
+      {typeof paperZoom === "number" && onZoomIn && onZoomOut && onResetZoom && (
+        <>
+          <button type="button" onClick={onZoomOut}>
+            Zoom Out
+          </button>
+          <button type="button" onClick={onResetZoom}>
+            Reset Zoom
+          </button>
+          <button type="button" onClick={onZoomIn}>
+            Zoom In
+          </button>
+          <span data-testid="toolbar-zoom-state">
+            {`${Math.round(paperZoom * 100)}%`}
+          </span>
+        </>
+      )}
       {onOpenStats && (
         <button type="button" onClick={onOpenStats}>
           Statistics
@@ -347,6 +371,10 @@ describe("router hydration", () => {
     }
 
     vi.stubGlobal("ResizeObserver", ResizeObserverMock)
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
     vi.resetModules()
     window.location.hash = "#/"
     window.sessionStorage.clear()
@@ -530,5 +558,111 @@ describe("router hydration", () => {
     expect(sidebarPanel.getAttribute("data-state")).toBe("open")
     expect(sidebarPanel.getAttribute("data-sidebar-default-width")).toBe("360")
     expect(screen.getByRole("separator", { name: "Resize File Explorer" })).not.toBeNull()
+  })
+
+  it("controls paper zoom from the toolbar without changing pagination", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    const { container } = render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("100%")
+    expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom In" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("110%")
+    })
+
+    expect(window.localStorage.getItem("slate.editor.paperZoom.v1")).toBe("1.1")
+    expect(container.querySelector(".screenplay-zoom-frame")?.getAttribute("data-paper-zoom")).toBe("1.1")
+    expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset Zoom" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("100%")
+    })
+  })
+
+  it("zooms paper with shifted wheel and pinch-like wheel while normal wheel keeps scrolling", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    const { container } = render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    const scrollContainer = screen.getByTestId("editor-paper-scroll-container")
+    Object.defineProperty(scrollContainer, "getBoundingClientRect", {
+      value: () => ({
+        x: 0,
+        y: 0,
+        width: 800,
+        height: 600,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        left: 0,
+        toJSON: () => ({}),
+      }),
+    })
+    scrollContainer.scrollLeft = 40
+    scrollContainer.scrollTop = 80
+
+    fireEvent.wheel(scrollContainer, {
+      deltaY: -100,
+      shiftKey: true,
+      clientX: 100,
+      clientY: 120,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("111%")
+    })
+
+    expect(scrollContainer.scrollLeft).toBeGreaterThan(40)
+    expect(scrollContainer.scrollTop).toBeGreaterThan(80)
+    const zoomAfterShiftWheel = screen.getByTestId("toolbar-zoom-state").textContent
+
+    fireEvent.wheel(scrollContainer, {
+      deltaY: -100,
+      clientX: 100,
+      clientY: 120,
+    })
+
+    expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe(zoomAfterShiftWheel)
+
+    fireEvent.wheel(scrollContainer, {
+      deltaY: 100,
+      ctrlKey: true,
+      clientX: 100,
+      clientY: 120,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("100%")
+    })
+
+    expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(2)
   })
 })
