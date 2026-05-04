@@ -1,184 +1,136 @@
 # Troubleshooting
 
-This guide covers issues that match the current Slate codebase. It intentionally avoids backend, database, authentication, cloud, and CI/CD troubleshooting because those systems are not present in the repository.
+This guide covers common local issues in the Electron-based Slate app.
 
-## Vite Cannot Start
+## Desktop App Does Not Launch
 
-Relevant files:
+Check:
 
 - `package.json`
-- `vite.config.ts`
-- `.env.example`
-- `src-tauri/tauri.conf.json`
+- `electron.vite.config.ts`
+- `electron/main/index.ts`
+- `electron/preload/index.ts`
 
-Checks:
+Common causes:
 
-- `vite.config.ts` uses port `1420` with `strictPort: true`.
-- `src-tauri/tauri.conf.json` expects the development URL to be `http://localhost:1420`.
-- If `TAURI_DEV_HOST` is set, Vite also configures HMR with that host and port `1421`.
+- Dependencies are not installed. Run `pnpm install`.
+- Electron postinstall scripts were not approved by pnpm, so the Electron binary may be missing.
+- The preload path in `electron/main/index.ts` does not match the `electron-vite` output shape.
+- A TypeScript error prevents `electron-vite` from bundling main or preload code.
 
-Common cause:
+## Renderer-Only Mode Cannot Use Files
 
-- Another process is already using port `1420`.
+`pnpm dev:renderer` serves the React app without Electron. Native dialogs, filesystem access, file watching, project storage, Git, and export writes require `window.slate`, which only exists in the Electron desktop app.
 
-## Tauri Development Does Not Launch
+Use `pnpm dev` when testing native workflows.
 
-Relevant files:
-
-- `src-tauri/Cargo.toml`
-- `src-tauri/tauri.conf.json`
-- `src-tauri/src/lib.rs`
-- `src-tauri/capabilities/default.json`
-
-Checks:
-
-- Confirm the Rust toolchain and Tauri system prerequisites are installed locally.
-- Confirm JavaScript dependencies are installed with `pnpm install`.
-- Confirm the renderer can start on port `1420`.
-- Confirm Tauri can run its configured `beforeDevCommand`, currently `pnpm dev`.
-
-## Native File Open Or Save Fails
+## Open Or Save Dialogs Fail
 
 Relevant files:
 
 - `src/lib/fileService.ts`
-- `src/hooks/useDocument.ts`
-- `src-tauri/capabilities/default.json`
+- `electron/preload/index.ts`
+- `electron/main/index.ts`
 
-Slate uses Tauri dialog and FS plugins for file operations. Current filters allow `.fountain`, `.spmd`, and `.txt` files for screenplay open/save flows.
+Slate uses Electron dialogs for file and folder selection. Current screenplay filters allow `.fountain`, `.spmd`, and `.txt` files for screenplay open/save flows.
 
-Checks:
+If dialogs fail, confirm that:
 
-- Confirm the selected file path is under the permissions granted in `src-tauri/capabilities/default.json`.
-- Confirm the file is readable or writable by the current operating-system user.
-- If the failure happens after editing permissions, confirm the FS permission entry still covers read, write, read-dir, and stat operations used by the app.
+- the app is running through Electron, not renderer-only Vite
+- `window.slate.openFileDialog`, `openDirectoryDialog`, and `saveFileDialog` are exposed from preload
+- IPC handlers are registered before the window loads
 
-## Project Browser Does Not Show Expected Files
+## Recent Projects Are Missing
 
-Relevant files:
-
-- `src/hooks/useFileExplorer.ts`
-- `src/components/FileExplorer.tsx`
-
-The file explorer filters noisy entries:
-
-- `.git`
-- `node_modules`
-- `.DS_Store`
-- `target`
-- `.next`
-- `dist`
-- `build`
-
-The UI treats `.fountain` and `.spmd` as screenplay file extensions.
-
-## Last Project Or File Does Not Restore
+Slate stores recent projects in `slate-projects.json` under Electron's `userData` directory.
 
 Relevant files:
 
-- `src/lib/editorSession.ts`
-- `src/routes/WelcomeRoute.tsx`
-- `src/routes/EditorRoute.tsx`
 - `src/hooks/useProjectStore.ts`
+- `electron/main/index.ts`
 
-Slate restores the editor route from `sessionStorage` key `slate-editor-session`. Recent project data is stored separately through Tauri Store in `slate-projects.json`.
+The store contains project paths, names, last files, timestamps, and favorite flags. It does not store screenplay contents.
 
-The editor route tries to restore:
+## Editor Route Redirects To Welcome
 
-1. The last explicit file path.
-2. `untitled.fountain` inside the active project folder.
-3. The first sorted `.fountain` or `.spmd` file in the project folder.
+Slate restores the editor route from `sessionStorage` key `slate-editor-session`.
 
-If none of those can be opened, Slate clears the editor session and navigates back to the welcome screen.
+If `/editor` redirects back to `/`, there is no restorable session. Open a project folder from the welcome screen first.
 
-## Disk Changes Are Waiting
+If a previous session cannot restore the file, `EditorRoute` tries:
+
+1. the last open file
+2. `untitled.fountain` in the project directory
+3. the first alphabetical `.fountain` or `.spmd` file in the project directory
+
+If none works, it clears the session and returns to welcome.
+
+## External Disk Changes Are Not Detected
 
 Relevant files:
 
 - `src/hooks/useFileWatcher.ts`
-- `src/hooks/useDocument.ts`
-- `src/components/AISidePanel.tsx`
-- `src/routes/EditorRoute.tsx`
+- `electron/main/index.ts`
 
-Slate polls the active file modification time. If the file changes on disk while the editor is clean, Slate reloads it. If the file changes while the editor has unsaved edits, Slate sets `externalChangePending` and waits for the user to reload from disk.
+Slate watches the active file from the Electron main process. If changes are not detected:
 
-This protects unsaved editor changes from being overwritten automatically.
+- confirm the active file still exists
+- confirm the app is running through Electron
+- confirm `window.slate.watchFile` is exposed
+- save or reload the file to reset watcher state
 
-## Autosave Does Not Run Immediately
+When the editor is dirty, external changes intentionally set `externalChangePending` instead of overwriting local edits.
 
-Relevant file:
-
-- `src/hooks/useDocument.ts`
-
-Autosave waits for three seconds after the document becomes dirty. It only saves when an existing `filePath` is available. New untitled documents need an initial save path before autosave can write to disk.
-
-## Git Status Or History Is Missing
+## Git Panel Is Empty
 
 Relevant files:
 
 - `src/hooks/useGit.ts`
 - `src/lib/git/commands.ts`
-- `src-tauri/capabilities/default.json`
+- `electron/main/index.ts`
 
-Git status and history appear only when the opened project folder is inside a Git work tree. The app runs the local `git` binary through the Tauri shell plugin.
+Git status and history appear only when the opened project folder is inside a Git work tree. The app runs the local `git` binary from high-level main-process handlers.
 
-Checks:
+Check:
 
-- Confirm the selected project folder is a Git repository.
-- Confirm `git` is installed and available in the environment visible to the Tauri app.
-- Confirm `src-tauri/capabilities/default.json` still includes `shell:allow-spawn` for `git`.
+- `git` is installed and available in the app environment
+- the opened folder is inside a Git repository
+- the repository has commits if history is expected
+- file paths passed to diff or checkout are inside the repository workflow
 
 ## PDF Export Fails
 
 Relevant files:
 
 - `src/lib/export/pdf.ts`
-- `src/lib/export/pdfStyles.ts`
 - `src/lib/export/pdfFonts.ts`
 - `src/lib/fileService.ts`
 
-PDF export uses `pdfmake` and embedded Courier Prime font data. The final PDF buffer is written through Tauri FS after the user picks a save path.
+PDF export uses `pdfmake` and embedded Courier Prime font data. The final PDF buffer is written through Electron IPC after the user picks a save path.
 
-Checks:
+Check:
 
-- Confirm the export path is writable.
-- Confirm `src/lib/export/pdfFonts.ts` still exports all Courier Prime font names referenced by `src/lib/export/pdf.ts`.
-- Confirm changes to screenplay nodes are also represented in the PDF export switch statement if those nodes should be printable.
+- Courier Prime font data exists in `src/lib/export/pdfFonts.ts`
+- the save dialog returns a path
+- the selected destination is writable
 
-## FDX Export Produces Missing Content
+## FDX Export Fails
 
 Relevant files:
 
 - `src/lib/export/fdx.ts`
-- `src/extensions/index.ts`
+- `src/lib/fileService.ts`
 
-FDX export manually maps supported ProseMirror node types to Final Draft paragraph types. If a new printable screenplay node is added to the editor schema, it must be added to the FDX exporter when appropriate.
+FDX export serializes the current ProseMirror document to Final Draft XML and writes it as text through Electron IPC.
 
-Currently mapped printable elements include:
+If output looks malformed, inspect the serializer first, not the Electron bridge.
 
-- Scene headings.
-- Action.
-- Character cues.
-- Dialogue.
-- Parentheticals.
-- Transitions.
-- Dual dialogue.
-- Title-page fields.
+## Browser Translation Breaks The DOM
 
-## Tests Need DOM APIs
+`index.html` must keep the anti-translation markers:
 
-Relevant test files:
+- `translate="no"`
+- `class="notranslate"`
+- `<meta name="google" content="notranslate" />`
 
-- `src/router.test.tsx`
-- `src/hooks/useDocument.test.tsx`
-- `src/components/Editor.test.tsx`
-
-React and route hydration tests opt into jsdom with `@vitest-environment jsdom`. Pure module tests do not need jsdom.
-
-## Stale Web Manifest Data Appears
-
-Relevant file:
-
-- `public/manifest.json`
-
-The committed manifest still contains starter names such as `TanStack App` and `Create TanStack App Sample`. This is stale scaffold metadata, not current Slate product documentation. Correct or remove it only when web/PWA behavior becomes part of the product scope.
+Browser translation tools can mutate React-managed DOM nodes and cause navigation or remove-child errors.

@@ -1,9 +1,10 @@
 node_modules
 .DS_Store
 dist
+out
+release
 dist-ssr
 *.local
 count.txt
 .env
-src-tauri/target/
 todos.json

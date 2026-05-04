@@ -1,8 +1,8 @@
 # Slate
 
-Slate is a local-first desktop screenplay editor for Fountain-based writing workflows. It combines a custom Tiptap screenplay editor, local project browsing, file-system synchronization, screenplay pagination, analysis panels, Git history awareness, and desktop packaging through Tauri 2.
+Slate is a local-first desktop screenplay editor for Fountain-based writing workflows. It combines a custom Tiptap screenplay editor, local project browsing, disk-change synchronization, screenplay pagination, analysis panels, Git awareness, PDF/FDX export, and Electron desktop packaging.
 
-The project is an active prototype. It is already more than a generic text editor: most of the codebase is dedicated to screenplay-specific structure, formatting, import/export, analytics, and native desktop boundaries.
+The project is an active prototype. Most of the codebase is dedicated to screenplay-specific structure, formatting, import/export, analytics, and a small native desktop boundary.
 
 ## What Slate Solves
 
@@ -19,22 +19,16 @@ The app is designed for local writing workflows:
 - Surface Git status and history when the opened project folder is a Git repository.
 - Copy prompt suggestions for external Claude Code review without uploading screenplay files from the app.
 
-## Current Status
-
-Slate is a desktop prototype with meaningful editor, file, export, and analysis functionality. It does not currently include a backend server, hosted account system, database, cloud synchronization, CI/CD pipeline, signing policy, notarization policy, or remote AI integration.
-
-The committed `public/manifest.json` still contains scaffold metadata from the original web starter. It should not be treated as evidence that Slate is currently maintained as a PWA product.
-
 ## Technology Stack
 
 | Area | Technology |
 | --- | --- |
-| Desktop shell | Tauri 2, Rust 2021 |
+| Desktop shell | Electron 41, electron-vite, electron-builder |
 | Renderer | React 19, TypeScript, Vite |
 | Routing | TanStack Router with hash history |
 | Editor | Tiptap 3 and ProseMirror |
 | Styling | Tailwind CSS 4, shadcn-style components, Radix/Base UI primitives |
-| Native plugins | Tauri FS, Dialog, Shell, Store, Log |
+| Native bridge | Secure `window.slate` preload API over typed IPC |
 | File format parsing | `fountain-js` plus project-specific serializers |
 | Export | `pdfmake` with embedded Courier Prime fonts, custom FDX XML generation |
 | Analytics | Custom TypeScript modules, `d3`, `recharts`, `compromise`, `syllable` |
@@ -46,13 +40,13 @@ The committed `public/manifest.json` still contains scaffold metadata from the o
 - **Project browser:** `src/routes/WelcomeRoute.tsx`, `src/components/WelcomeScreen.tsx`, and `src/hooks/useProjectStore.ts` manage local project folders, favorites, recency, and last-opened files.
 - **Screenplay editor:** `src/components/Editor.tsx` uses the custom Tiptap schema exported from `src/extensions/index.ts`.
 - **Fountain import/export:** `src/lib/fountain/deserialize.ts` and `src/lib/fountain/serialize.ts` translate between Fountain text and Tiptap document JSON.
-- **Native file operations:** `src/lib/fileService.ts`, `src/hooks/useDocument.ts`, and Tauri FS/Dialog permissions handle open, save, save as, autosave, reload, and export writes.
-- **File watching:** `src/hooks/useFileWatcher.ts` polls file modification time and defers disk reloads when the editor has unsaved changes.
+- **Native file operations:** `src/lib/fileService.ts` calls `window.slate` for open, save, save as, autosave, reload, directory reads, and export writes.
+- **File watching:** `src/hooks/useFileWatcher.ts` subscribes to Electron main-process file watch events and defers disk reloads when the editor has unsaved changes.
 - **Pagination:** `src/lib/pagination.ts`, `src/lib/paginationLayout.ts`, `src/extensions/PageNumbers.ts`, and `src/lib/measurementDiv.ts` provide estimated and DOM-measured pagination.
 - **Exports:** `src/lib/export/pdf.ts` creates PDF definitions and buffers, while `src/lib/export/fdx.ts` generates Final Draft XML.
 - **Production tools:** `src/lib/production/sceneNumbers.ts`, `src/lib/production/revisions.ts`, and related Tiptap extensions handle scene numbering and revision marks.
 - **Analytics:** `src/lib/stats.ts` and `src/lib/analytics/*` calculate stats, character metrics, pacing, readability, beat targets, Bechdel criteria, and co-occurrence data.
-- **Git awareness:** `src/hooks/useGit.ts` and `src/lib/git/commands.ts` call the local `git` binary through the Tauri shell plugin.
+- **Git awareness:** `src/hooks/useGit.ts` and `src/lib/git/commands.ts` call high-level `window.slate.git` methods. The main process runs the local `git` binary without exposing a generic shell API.
 - **AI side panel:** `src/components/AISidePanel.tsx` provides copyable prompt suggestions and disk-sync guidance. It does not call a hosted AI API.
 
 ## Project Structure
@@ -60,34 +54,32 @@ The committed `public/manifest.json` still contains scaffold metadata from the o
 ```text
 slate/
 |-- docs/                  # Project documentation
+|-- electron/
+|   |-- main/              # BrowserWindow, IPC handlers, filesystem, Git, store
+|   |-- preload/           # contextBridge exposure for window.slate
+|   `-- shared/            # IPC channel names and shared API types
 |-- public/                # Static renderer assets and Courier Prime font files
 |-- src/
 |   |-- components/        # Editor, toolbar, panels, file explorer, stats UI
 |   |-- extensions/        # Custom Tiptap screenplay schema and behavior
-|   |-- hooks/             # Document, project, file, watcher, Git, and viewport hooks
+|   |-- hooks/             # Document, project, watcher, Git, and viewport hooks
 |   |-- lib/               # Fountain, export, analytics, pagination, Git, production helpers
 |   |-- routes/            # Welcome and editor routes
 |   |-- styles/            # Screenplay-specific CSS
 |   |-- App.tsx
 |   |-- main.tsx
 |   `-- router.tsx
-|-- src-tauri/
-|   |-- capabilities/      # Tauri permission model
-|   |-- icons/             # Desktop bundle icons
-|   |-- src/               # Rust entrypoint and plugin setup
-|   |-- Cargo.toml
-|   `-- tauri.conf.json
-|-- index.html             # Vite renderer shell
-|-- package.json           # Scripts and JavaScript dependencies
-`-- vite.config.ts         # Vite, React, Tailwind, and Tauri dev server configuration
+|-- electron-builder.yml   # Desktop packaging configuration
+|-- electron.vite.config.ts
+|-- index.html             # Renderer shell
+|-- package.json
+`-- vite.config.ts         # Renderer-only/Vitest Vite configuration
 ```
 
 ## Prerequisites
 
-- Node.js compatible with the installed frontend toolchain.
+- Node.js compatible with the installed frontend and Electron toolchain.
 - pnpm.
-- Rust toolchain required by Tauri 2.
-- Tauri system prerequisites for the target operating system.
 - A local `git` binary if you want Git status/history surfaces to work inside opened project folders.
 
 ## Installation
@@ -96,38 +88,18 @@ slate/
 pnpm install
 ```
 
-## Local Development
-
-The repository exposes both renderer-only and Tauri desktop workflows.
-
-```bash
-pnpm dev
-```
-
-Starts the Vite renderer development server. `vite.config.ts` uses port `1420` with `strictPort: true` because `src-tauri/tauri.conf.json` points Tauri development at `http://localhost:1420`.
-
-```bash
-pnpm tauri dev
-```
-
-Starts the Tauri desktop app. The Tauri configuration runs `pnpm dev` before launching the desktop shell.
-
-Optional environment configuration lives in `.env.example`:
-
-```env
-TAURI_DEV_HOST=localhost
-```
-
-`TAURI_DEV_HOST` is used by `vite.config.ts` to configure the dev host and HMR host when a host override is needed.
-
 ## Available Scripts
 
 | Command | Purpose |
 | --- | --- |
-| `pnpm dev` | Starts the Vite renderer dev server. |
-| `pnpm tauri dev` | Starts the Tauri desktop app in development mode. |
-| `pnpm build` | Runs `tsc --noEmit` and `vite build`. |
-| `pnpm tauri build` | Runs Tauri desktop packaging, using `pnpm build` as the configured frontend build step. |
+| `pnpm dev` | Starts the Electron desktop app through electron-vite. |
+| `pnpm dev:renderer` | Starts the renderer-only Vite server for UI work that does not need native APIs. |
+| `pnpm build` | Runs TypeScript checking and builds the Electron main, preload, and renderer bundles. |
+| `pnpm preview` | Previews the built Electron app through electron-vite. |
+| `pnpm dist` | Builds and packages the desktop app with electron-builder. |
+| `pnpm dist:mac` | Builds and packages the macOS target. |
+| `pnpm dist:win` | Builds and packages the Windows target. |
+| `pnpm dist:linux` | Builds and packages the Linux target. |
 | `pnpm test` | Runs the Vitest suite once. |
 | `pnpm lint` | Runs ESLint. |
 | `pnpm typecheck` | Runs TypeScript without emitting files. |
@@ -156,19 +128,13 @@ pnpm test
 
 ## Build And Packaging
 
-The renderer build is:
+Electron source is bundled by `electron-vite` from:
 
-```bash
-pnpm build
-```
+- `electron/main/index.ts`
+- `electron/preload/index.ts`
+- `index.html` and `src/main.tsx`
 
-The desktop packaging workflow is:
-
-```bash
-pnpm tauri build
-```
-
-`src-tauri/tauri.conf.json` configures `frontendDist` as `../dist`, enables bundles, sets `targets` to `all`, and uses icons from `src-tauri/icons/`. The repository does not currently document or configure signing, notarization, release channels, auto-update, hosted deployment, or rollback procedures.
+Packaged artifacts are configured in `electron-builder.yml` and emitted under `release/`. Signing, notarization, release channels, auto-update, hosted deployment, and rollback procedures are not configured yet.
 
 ## Local Data And Persistence
 
@@ -176,11 +142,11 @@ Slate does not use a database.
 
 It stores and accesses data through local desktop mechanisms:
 
-- Screenplay files are read and written directly on disk through Tauri FS operations.
-- Recent project metadata is stored with the Tauri Store plugin in `slate-projects.json`.
+- Screenplay files are read and written directly on disk through Electron IPC.
+- Recent project metadata is stored as `slate-projects.json` under Electron's `userData` directory.
 - The current editor session is stored in browser `sessionStorage` under `slate-editor-session`.
-- File-change detection uses Tauri FS `stat` polling for the active file.
-- Git data is read by spawning the local `git` binary through the Tauri shell plugin.
+- File-change detection uses Electron main-process file watchers for the active file.
+- Git data is read by spawning the local `git` binary from high-level main-process handlers.
 
 ## Documentation
 
@@ -193,7 +159,7 @@ Start with:
 - `docs/development.md` for project-specific development guidance.
 - `docs/deployment.md` for desktop packaging notes.
 - `docs/troubleshooting.md` for common local issues.
-- `SECURITY.md` for local file, shell, and Tauri permission considerations.
+- `SECURITY.md` for local file, shell, and Electron IPC considerations.
 
 ## Known Limitations
 
@@ -201,9 +167,8 @@ Start with:
 - No CI/CD, release automation, signing, notarization, or auto-update workflow is configured.
 - The AI side panel provides prompt suggestions only; it does not execute AI calls or manage Claude Code processes.
 - `public/manifest.json` contains stale starter metadata and should be corrected or removed if a web/PWA surface becomes a real product target.
-- Tauri permissions currently allow broad `$HOME/**` filesystem access and allow spawning `git`; review `src-tauri/capabilities/default.json` before distributing builds.
-- `src-tauri/tauri.conf.json` sets `csp` to `null`; this should be revisited before any production release.
+- The Electron IPC bridge intentionally exposes local filesystem and Git features needed by the app; review handlers in `electron/main/index.ts` before distribution.
 
 ## License
 
-No `LICENSE` file is currently committed, and `src-tauri/Cargo.toml` has an empty `license` field. Decide and document the project license before distributing Slate publicly.
+No `LICENSE` file is currently committed. Decide and document the project license before distributing Slate publicly.

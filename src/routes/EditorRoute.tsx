@@ -1,7 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { useNavigate } from "@tanstack/react-router"
-import { readDir } from "@tauri-apps/plugin-fs"
 import { Editor } from "@/components/Editor"
 import { ScreenplayPageStack } from "@/components/ScreenplayPageStack"
 import { Toolbar } from "@/components/Toolbar"
@@ -20,7 +19,8 @@ import { pageNumbersPluginKey } from "@/extensions/PageNumbers"
 import { paginate, type PaginationResult } from "@/lib/pagination"
 import { calculateStats, type ScreenplayStats } from "@/lib/stats"
 import { editorToFDX, generatePDF } from "@/lib/export"
-import { saveExportFile, saveBinaryFile } from "@/lib/fileService"
+import { readDirectory, saveExportFile, saveBinaryFile } from "@/lib/fileService"
+import { getPathDir, isPathInsideDirectory } from "@/lib/slateApi"
 import {
   applyAutoNumbering,
   lockSceneNumbers,
@@ -38,16 +38,14 @@ import {
 import { toast } from "sonner"
 
 function deriveProjectDir(filePath: string | null) {
-  if (!filePath) return null
-  const lastSlash = filePath.lastIndexOf("/")
-  return lastSlash > 0 ? filePath.slice(0, lastSlash) : null
+  return getPathDir(filePath)
 }
 
 const SCREENPLAY_EXTENSIONS = new Set(["fountain", "spmd"])
 
 async function findDefaultScreenplayFile(projectDir: string) {
   try {
-    const entries = await readDir(projectDir)
+    const entries = await readDirectory(projectDir)
     const candidates = entries.filter((entry) => {
       if (entry.isDirectory) return false
       const ext = entry.name.split(".").pop()?.toLowerCase() ?? ""
@@ -58,11 +56,11 @@ async function findDefaultScreenplayFile(projectDir: string) {
 
     const preferred = candidates.find((entry) => entry.name === "untitled.fountain")
     if (preferred) {
-      return `${projectDir}/${preferred.name}`
+      return preferred.path
     }
 
     const [firstCandidate] = [...candidates].sort((a, b) => a.name.localeCompare(b.name))
-    return firstCandidate ? `${projectDir}/${firstCandidate.name}` : null
+    return firstCandidate ? firstCandidate.path : null
   } catch {
     return null
   }
@@ -89,6 +87,7 @@ export function EditorRoute() {
   const [showFileExplorer, setShowFileExplorer] = useState(true)
 
   const projectStore = useProjectStore()
+  const { updateLastFile } = projectStore
 
   const {
     fileName,
@@ -146,7 +145,10 @@ export function EditorRoute() {
   }, [canRestoreSession, navigate])
 
   useEffect(() => {
-    if (filePath && (!activeProjectDir || !filePath.startsWith(`${activeProjectDir}/`))) {
+    if (
+      filePath &&
+      (!activeProjectDir || !isPathInsideDirectory(filePath, activeProjectDir))
+    ) {
       setActiveProjectDir(deriveProjectDir(filePath))
     }
   }, [activeProjectDir, filePath])
@@ -157,9 +159,9 @@ export function EditorRoute() {
 
   useEffect(() => {
     if (activeProjectDir && filePath) {
-      projectStore.updateLastFile(activeProjectDir, filePath)
+      updateLastFile(activeProjectDir, filePath)
     }
-  }, [activeProjectDir, filePath]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeProjectDir, filePath, updateLastFile])
 
   useEffect(() => {
     if (activeProjectDir || filePath) {
@@ -210,7 +212,7 @@ export function EditorRoute() {
     if (!openedPath) return
 
     setActiveProjectDir((prev) => {
-      if (prev && openedPath.startsWith(`${prev}/`)) return prev
+      if (prev && isPathInsideDirectory(openedPath, prev)) return prev
       return deriveProjectDir(openedPath)
     })
   }, [openFile])
@@ -220,7 +222,7 @@ export function EditorRoute() {
     if (!opened) return
 
     setActiveProjectDir((prev) => {
-      if (prev && path.startsWith(`${prev}/`)) return prev
+      if (prev && isPathInsideDirectory(path, prev)) return prev
       return deriveProjectDir(path)
     })
   }, [openFilePath])
@@ -245,7 +247,7 @@ export function EditorRoute() {
     if (!savedPath) return
 
     setActiveProjectDir((prev) => {
-      if (prev && savedPath.startsWith(`${prev}/`)) return prev
+      if (prev && isPathInsideDirectory(savedPath, prev)) return prev
       return deriveProjectDir(savedPath)
     })
   }, [saveAsFile])

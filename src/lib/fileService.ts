@@ -1,5 +1,5 @@
-import { open, save } from "@tauri-apps/plugin-dialog"
-import { readTextFile, writeTextFile, writeFile } from "@tauri-apps/plugin-fs"
+import { getSlateApi } from "@/lib/slateApi"
+import type { SlateFileEntry, SlateFileFilter, SlateFileStat } from "../../electron/shared/types"
 
 export interface FileResult<T> {
   ok: true
@@ -20,18 +20,51 @@ const FOUNTAIN_FILTERS = [
   },
 ]
 
+export async function readFountainFile(path: string): Promise<string> {
+  return getSlateApi().readTextFile(path)
+}
+
+export async function readDirectory(path: string): Promise<SlateFileEntry[]> {
+  return getSlateApi().readDirectory(path)
+}
+
+export async function statFile(path: string): Promise<SlateFileStat | null> {
+  return getSlateApi().statFile(path)
+}
+
+export function watchFile(
+  path: string,
+  callback: Parameters<ReturnType<typeof getSlateApi>["watchFile"]>[1],
+) {
+  return getSlateApi().watchFile(path, callback)
+}
+
+export async function openProjectDirectory(): Promise<FileResponse<string>> {
+  try {
+    const path = await getSlateApi().openDirectoryDialog()
+
+    if (!path) return { ok: false, error: "cancelled" }
+
+    return { ok: true, data: path }
+  } catch (err) {
+    return {
+      ok: false,
+      error: `Failed to open folder: ${err instanceof Error ? err.message : String(err)}`,
+    }
+  }
+}
+
 export async function openFountainFile(): Promise<
   FileResponse<{ path: string; content: string }>
 > {
   try {
-    const selected = await open({
-      multiple: false,
+    const selected = await getSlateApi().openFileDialog({
       filters: FOUNTAIN_FILTERS,
     })
 
     if (!selected) return { ok: false, error: "cancelled" }
 
-    const content = await readTextFile(selected)
+    const content = await getSlateApi().readTextFile(selected)
     return { ok: true, data: { path: selected, content } }
   } catch (err) {
     return {
@@ -46,7 +79,7 @@ export async function saveFountainFile(
   content: string,
 ): Promise<FileResponse<void>> {
   try {
-    await writeTextFile(path, content)
+    await getSlateApi().writeTextFile(path, content)
     return { ok: true, data: undefined }
   } catch (err) {
     return {
@@ -60,14 +93,14 @@ export async function saveAsFountainFile(
   content: string,
 ): Promise<FileResponse<string>> {
   try {
-    const path = await save({
+    const path = await getSlateApi().saveFileDialog({
       filters: FOUNTAIN_FILTERS,
       defaultPath: "untitled.fountain",
     })
 
     if (!path) return { ok: false, error: "cancelled" }
 
-    await writeTextFile(path, content)
+    await getSlateApi().writeTextFile(path, content)
     return { ok: true, data: path }
   } catch (err) {
     return {
@@ -79,18 +112,18 @@ export async function saveAsFountainFile(
 
 export async function saveExportFile(
   content: string,
-  filters: Array<{ name: string; extensions: string[] }>,
+  filters: SlateFileFilter[],
   defaultPath?: string,
 ): Promise<FileResponse<string>> {
   try {
-    const path = await save({
+    const path = await getSlateApi().saveFileDialog({
       filters,
       defaultPath,
     })
 
     if (!path) return { ok: false, error: "cancelled" }
 
-    await writeTextFile(path, content)
+    await getSlateApi().writeTextFile(path, content)
     return { ok: true, data: path }
   } catch (err) {
     return {
@@ -102,18 +135,18 @@ export async function saveExportFile(
 
 export async function saveBinaryFile(
   content: Uint8Array,
-  filters: Array<{ name: string; extensions: string[] }>,
+  filters: SlateFileFilter[],
   defaultPath?: string,
 ): Promise<FileResponse<string>> {
   try {
-    const path = await save({
+    const path = await getSlateApi().saveFileDialog({
       filters,
       defaultPath,
     })
 
     if (!path) return { ok: false, error: "cancelled" }
 
-    await writeFile(path, content)
+    await getSlateApi().writeBinaryFile(path, content)
     return { ok: true, data: path }
   } catch (err) {
     return {

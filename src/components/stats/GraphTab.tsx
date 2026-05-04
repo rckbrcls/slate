@@ -135,7 +135,7 @@ export function GraphTab({ cooccurrence, characters }: GraphTabProps) {
     // Nodes
     const node = g
       .append("g")
-      .selectAll("circle")
+      .selectAll<SVGCircleElement, GraphNode>("circle")
       .data(nodes)
       .join("circle")
       .attr("r", (d) => 6 + (d.wordCount / maxWords) * 16)

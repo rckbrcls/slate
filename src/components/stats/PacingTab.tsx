@@ -9,7 +9,6 @@ import {
   Legend,
   Bar,
   BarChart,
-  ResponsiveContainer,
 } from "recharts"
 import { motion } from "motion/react"
 import {
@@ -19,7 +18,6 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import type { PacingEntry } from "@/lib/analytics/pacing"
 

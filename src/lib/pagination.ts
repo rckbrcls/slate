@@ -502,7 +502,6 @@ export function paginateMeasured(
         const nextHeight = nextEntry.heightPx || measure(nextEntry.node)
         const minNeeded = Math.min(nextHeight, MIN_DIALOGUE_SPLIT_PX)
         if (currentHeight + minNeeded > contentHeightPx + SUBPIXEL_EPSILON) {
-          currentHeight -= entry.heightPx
           const inserted = pushPageBreak(pageBreaks, {
             afterPos: entry.pos,
             pageNumber,

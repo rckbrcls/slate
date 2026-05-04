@@ -1,112 +1,101 @@
 # Getting Started
 
-This guide covers the local development workflow for Slate. Slate is a Tauri desktop app with a React/Vite renderer, so there are two main ways to work with it: renderer-only development and full desktop development.
+This guide covers the local development workflow for Slate. Slate is an Electron desktop app with a React/Vite renderer.
 
-## Requirements
+## Prerequisites
 
-- Node.js compatible with the installed dependencies.
+- Node.js compatible with the installed frontend and Electron toolchain.
 - pnpm.
-- Rust toolchain required by Tauri 2.
-- Tauri system prerequisites for the operating system you are targeting.
-- A local `git` binary if you want Git status and history features inside opened screenplay project folders.
+- A local `git` binary if you want Git status/history inside opened project folders.
 
-## Install Dependencies
-
-From the repository root:
+## Installation
 
 ```bash
 pnpm install
 ```
 
-This installs the renderer dependencies, Tauri CLI package, TypeScript tooling, Vitest, Tailwind, Tiptap, and other JavaScript packages declared in `package.json`.
+This installs Electron, electron-vite, electron-builder, the renderer dependencies, TypeScript tooling, Vitest, Tailwind, Tiptap, and other JavaScript packages declared in `package.json`.
 
-Rust dependencies for the native shell are declared in `src-tauri/Cargo.toml` and locked in `src-tauri/Cargo.lock`.
+The project does not require local environment variables by default. `.env.example` is intentionally empty apart from that note.
 
-## Environment Configuration
-
-The repository includes `.env.example`:
-
-```env
-TAURI_DEV_HOST=localhost
-```
-
-`vite.config.ts` reads `TAURI_DEV_HOST` and, when present, uses it for the Vite server host and HMR host. Most local development can use the default configuration without changing this value.
-
-No API keys, database URLs, authentication secrets, or service credentials are required by the current codebase.
-
-## Renderer Development
+## Desktop Development
 
 ```bash
 pnpm dev
 ```
 
-This starts Vite on port `1420` with `strictPort: true`. The server ignores changes under `src-tauri/` and screenplay files such as `*.fountain` and `*.spmd`.
+This starts the Electron desktop app through `electron-vite`. Use this workflow when native dialogs, filesystem access, local project storage, file watching, Git status/history, or export writes need to work.
 
-Use this workflow when working on renderer code that does not require native dialogs, Tauri Store, Tauri FS, or Tauri shell execution.
+Native Electron source lives in:
 
-## Desktop Development
+- `electron/main/index.ts`
+- `electron/preload/index.ts`
+- `electron/shared/ipc.ts`
+- `electron/shared/types.ts`
+
+## Renderer-Only Development
 
 ```bash
-pnpm tauri dev
+pnpm dev:renderer
 ```
 
-This starts the Tauri desktop app. `src-tauri/tauri.conf.json` points Tauri at `http://localhost:1420` and runs `pnpm dev` before launching the desktop shell.
+This starts the Vite renderer server on port `1420` with `strictPort: true`. The server ignores Electron output and screenplay files such as `*.fountain` and `*.spmd`.
 
-Use this workflow when you need to verify:
+Use this workflow only for renderer UI work that does not require `window.slate`. Native file, Git, project-store, and export-write flows need the Electron app.
 
-- Native open/save dialogs.
-- File reads and writes through Tauri FS.
-- Project metadata persistence through Tauri Store.
-- Git status/history through the Tauri shell plugin.
-- Desktop window behavior.
-
-## Verification Commands
-
-The project exposes these checks:
+## Testing
 
 ```bash
-pnpm lint
-pnpm typecheck
 pnpm test
+```
+
+Tests run through Vitest. Some React tests opt into jsdom with file-level comments.
+
+## Type Checking
+
+```bash
+pnpm typecheck
+```
+
+TypeScript covers the renderer, Electron main process, preload script, shared IPC types, and config files.
+
+## Build
+
+```bash
 pnpm build
 ```
 
-`pnpm build` runs `tsc --noEmit` and `vite build`.
+This runs `tsc --noEmit` and `electron-vite build`. The build outputs Electron bundles under `out/`.
 
-The test suite is run with Vitest:
-
-```bash
-pnpm test
-```
-
-Some tests use jsdom through file-level `@vitest-environment jsdom` comments. Other tests run directly against pure TypeScript modules.
-
-## Desktop Packaging Command
+## Packaging
 
 ```bash
-pnpm tauri build
+pnpm dist
 ```
 
-This uses Tauri packaging and the `beforeBuildCommand` from `src-tauri/tauri.conf.json`, which is currently `pnpm build`.
+Packaging is handled by `electron-builder` using `electron-builder.yml`.
 
-The repository does not currently define signing, notarization, auto-update, or release publication steps.
+Targeted package commands:
 
-## First Files To Read
+- `pnpm dist:mac`
+- `pnpm dist:win`
+- `pnpm dist:linux`
 
-For a fast orientation pass:
+Signing, notarization, auto-update, release channels, and CI/CD are not configured yet.
 
-1. `README.md` for the project overview.
-2. `package.json` for scripts and dependency categories.
-3. `src/router.tsx` for the application routes.
-4. `src/routes/WelcomeRoute.tsx` and `src/routes/EditorRoute.tsx` for the main user flow.
-5. `src/extensions/index.ts` for the active screenplay schema.
-6. `src/hooks/useDocument.ts` and `src/lib/fileService.ts` for file handling.
-7. `src-tauri/capabilities/default.json` for native permissions.
+## Useful Files To Read First
 
-## Notes
+1. `src/routes/EditorRoute.tsx` for the main editor workspace flow.
+2. `src/hooks/useDocument.ts` for document lifecycle, autosave, and external disk changes.
+3. `src/lib/fileService.ts` for renderer access to the Electron file bridge.
+4. `electron/main/index.ts` for native dialogs, filesystem handlers, project storage, Git, and security defaults.
+5. `electron/preload/index.ts` for the `window.slate` API.
+6. `src/extensions/index.ts` for the active Tiptap screenplay schema.
+7. `src/lib/export/pdf.ts` and `src/lib/export/fdx.ts` for export behavior.
 
-- Slate is local-first. Screenplay documents are user-owned local files.
-- Recent project metadata is stored by the Tauri Store plugin, not by a database.
-- The current editor session is stored in `sessionStorage`.
-- The AI side panel copies prompt suggestions; it does not call an external AI service.
-- The committed web manifest currently contains stale starter metadata and is not the source of truth for product identity.
+## Local Data Notes
+
+- Screenplay content remains in user-selected local files.
+- Recent project metadata is stored as `slate-projects.json` under Electron's `userData` directory.
+- Current route/session restoration uses browser `sessionStorage` key `slate-editor-session`.
+- Git state is read on demand and is not persisted by Slate.

@@ -5,6 +5,6 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/", "src-tauri/"],
+    ignores: ["dist/", "out/", "release/"],
   },
 )

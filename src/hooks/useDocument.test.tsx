@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, waitFor } from "@testing-library/react"
+import { render } from "@testing-library/react"
 import { act } from "react"
 import type { RefObject } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -8,16 +8,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 const mocks = vi.hoisted(() => ({
   watcherCallback: null as null | (() => void | Promise<void>),
   notifySaved: vi.fn(),
-  readTextFile: vi.fn(),
+  readFountainFile: vi.fn(),
   saveFountainFile: vi.fn(),
   openFountainFile: vi.fn(),
   saveAsFountainFile: vi.fn(),
   editorToFountain: vi.fn(),
   fountainToEditor: vi.fn(),
-}))
-
-vi.mock("@tauri-apps/plugin-fs", () => ({
-  readTextFile: mocks.readTextFile,
 }))
 
 vi.mock("@/hooks/useFileWatcher", () => ({
@@ -29,6 +25,7 @@ vi.mock("@/hooks/useFileWatcher", () => ({
 
 vi.mock("@/lib/fileService", () => ({
   openFountainFile: mocks.openFountainFile,
+  readFountainFile: mocks.readFountainFile,
   saveFountainFile: mocks.saveFountainFile,
   saveAsFountainFile: mocks.saveAsFountainFile,
 }))
@@ -53,17 +50,27 @@ function HookHarness({
   } | null>
   onChange: (value: ReturnType<typeof useDocument>) => void
 }) {
-  const value = useDocument(editorRef)
+  const value = useDocument(editorRef as Parameters<typeof useDocument>[0])
   onChange(value)
   return null
 }
 
+function getLatestDocument(
+  value: ReturnType<typeof useDocument> | null,
+): ReturnType<typeof useDocument> {
+  expect(value).not.toBeNull()
+  return value as ReturnType<typeof useDocument>
+}
+
 describe("useDocument external sync", () => {
   beforeEach(() => {
+    ;(globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean
+    }).IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers()
     mocks.watcherCallback = null
     mocks.notifySaved.mockReset()
-    mocks.readTextFile.mockReset()
+    mocks.readFountainFile.mockReset()
     mocks.saveFountainFile.mockReset()
     mocks.openFountainFile.mockReset()
     mocks.saveAsFountainFile.mockReset()
@@ -81,6 +88,9 @@ describe("useDocument external sync", () => {
   afterEach(() => {
     vi.runOnlyPendingTimers()
     vi.useRealTimers()
+    ;(globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean
+    }).IS_REACT_ACT_ENVIRONMENT = false
   })
 
   it("applies disk changes immediately when the editor is clean", async () => {
@@ -103,7 +113,7 @@ describe("useDocument external sync", () => {
       />,
     )
 
-    mocks.readTextFile
+    mocks.readFountainFile
       .mockResolvedValueOnce("initial draft")
       .mockResolvedValueOnce("updated from disk")
 
@@ -115,11 +125,9 @@ describe("useDocument external sync", () => {
       await mocks.watcherCallback?.()
     })
 
-    await waitFor(() => {
-      expect(setContent).toHaveBeenCalledTimes(2)
-    })
+    expect(setContent).toHaveBeenCalledTimes(2)
 
-    expect(latest?.externalChangePending).toBe(false)
+    expect(getLatestDocument(latest).externalChangePending).toBe(false)
   })
 
   it("marks externalChangePending when the editor is dirty", async () => {
@@ -142,7 +150,7 @@ describe("useDocument external sync", () => {
       />,
     )
 
-    mocks.readTextFile.mockResolvedValueOnce("initial draft")
+    mocks.readFountainFile.mockResolvedValueOnce("initial draft")
 
     await act(async () => {
       await latest?.openFilePath("/tmp/script.fountain")
@@ -157,6 +165,6 @@ describe("useDocument external sync", () => {
     })
 
     expect(setContent).toHaveBeenCalledTimes(1)
-    expect(latest?.externalChangePending).toBe(true)
+    expect(getLatestDocument(latest).externalChangePending).toBe(true)
   })
 })

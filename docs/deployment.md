@@ -1,84 +1,80 @@
-# Desktop Packaging
+# Deployment
 
-Slate does not currently have a hosted web deployment, backend deployment, CI/CD workflow, release pipeline, signing policy, notarization policy, or auto-update setup.
+The only deployment-like workflow present in the repository is Electron desktop packaging.
 
-The only deployment-like workflow present in the repository is Tauri desktop packaging.
+Slate does not currently include:
 
-## Packaging Stack
+- Hosted web deployment.
+- Backend service deployment.
+- Database provisioning.
+- CI/CD pipeline.
+- Signing or notarization automation.
+- Auto-update infrastructure.
 
-- Renderer build: Vite output in `dist/`.
-- Native shell: Tauri 2 under `src-tauri/`.
-- Bundle configuration: `src-tauri/tauri.conf.json`.
-- Rust package metadata: `src-tauri/Cargo.toml`.
-- Bundle icons: `src-tauri/icons/`.
+## Current Packaging Stack
 
-## Renderer Build
+- Native shell: Electron.
+- Build tool: `electron-vite`.
+- Packager: `electron-builder`.
+- Bundle configuration: `electron-builder.yml`.
+- Main process entry: `electron/main/index.ts`.
+- Preload entry: `electron/preload/index.ts`.
+- Renderer entry: `index.html` and `src/main.tsx`.
+
+## Build
 
 ```bash
 pnpm build
 ```
 
-This command is defined in `package.json` as:
+This runs TypeScript checking and `electron-vite build`. Bundled output is emitted under `out/`.
+
+## Package
 
 ```bash
-tsc --noEmit && vite build
+pnpm dist
 ```
 
-It typechecks the renderer and creates the Vite production output.
+This builds and packages the app with `electron-builder`.
 
-## Tauri Desktop Build
+Targeted commands:
 
 ```bash
-pnpm tauri build
+pnpm dist:mac
+pnpm dist:win
+pnpm dist:linux
 ```
 
-`src-tauri/tauri.conf.json` currently configures:
+`electron-builder.yml` currently configures:
 
-- `frontendDist`: `../dist`
-- `beforeBuildCommand`: `pnpm build`
-- `bundle.active`: `true`
-- `bundle.targets`: `all`
-- window title: `Slate`
-- default window size: `1200x800`
-- minimum window size: `800x600`
-- product name: `slate`
-- identifier: `com.slate.app`
+- `appId: com.slate.editor`
+- `productName: Slate`
+- output directory `release`
+- `asar: true`
+- macOS `dmg`
+- Windows `nsis`
+- Linux `AppImage`
 
-## Release Gaps
+## Not Yet Configured
 
-Before distributing builds publicly, define and document:
+Before distributing public builds, decide and implement:
 
-- Supported operating systems and architectures.
-- Versioning policy across `package.json`, `src-tauri/tauri.conf.json`, and `src-tauri/Cargo.toml`.
-- Code signing requirements.
-- macOS notarization requirements.
-- Release artifact storage.
-- Update channel and auto-update strategy, if any.
-- Pre-release verification checklist.
-- Rollback or replacement process for broken installers.
-- License and third-party notice requirements.
+- Application icon assets for all platforms.
+- Versioning policy.
+- macOS signing and notarization.
+- Windows code signing.
+- Linux package metadata beyond AppImage defaults.
+- Auto-update channel and provider.
+- Release notes workflow.
+- Crash reporting policy.
+- CI/CD packaging environment.
+- Security reporting contact.
+- License.
 
-## Security Review Before Packaging
+## Local Data During Packaged Runs
 
-Review these files before producing release artifacts:
+Slate stores recent project metadata as `slate-projects.json` under Electron's `userData` directory. Screenplay files and exported artifacts remain in user-selected local paths.
 
-- `src-tauri/capabilities/default.json`
-- `src-tauri/tauri.conf.json`
-- `SECURITY.md`
+## Environment
 
-Important current concerns:
-
-- Filesystem permissions allow access under `$HOME/**`.
-- Shell permissions allow spawning `git` with unrestricted arguments.
-- `csp` is set to `null`.
-- The app works with user-owned screenplay files and exported documents.
-
-## Not Currently Applicable
-
-The repository has no evidence of:
-
-- Docker deployment.
-- Vercel, Netlify, or static-hosting deployment.
-- AWS, Supabase, Firebase, or other cloud environment setup.
-- GitHub Actions or another CI/CD workflow.
-- Production environment variables beyond optional local Tauri host configuration.
+No production environment variables are required by the current codebase.

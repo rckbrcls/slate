@@ -1,42 +1,45 @@
 import { useState, useEffect, useCallback, useRef } from "react"
-import { load, type Store } from "@tauri-apps/plugin-store"
+import { getPathName, getSlateApi } from "@/lib/slateApi"
+import type { ProjectEntry } from "../../electron/shared/types"
 
-export interface ProjectEntry {
-  path: string
-  name: string
-  lastFile: string | null
-  lastOpenedAt: string
-  favorite: boolean
-}
-
-const STORE_KEY = "projects"
+export type { ProjectEntry }
 
 export function useProjectStore() {
   const [projects, setProjects] = useState<ProjectEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const storeRef = useRef<Store | null>(null)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
     let cancelled = false
     async function init() {
-      const store = await load("slate-projects.json", { defaults: {}, autoSave: false })
-      if (cancelled) return
-      storeRef.current = store
-      const data = await store.get<ProjectEntry[]>(STORE_KEY)
-      if (!cancelled) {
-        setProjects(data ?? [])
-        setLoading(false)
+      try {
+        const data = await getSlateApi().projects.read()
+        if (!cancelled) {
+          setProjects(data)
+        }
+      } catch (error) {
+        console.error("Failed to load Slate projects", error)
+        if (!cancelled) {
+          setProjects([])
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
+
+    mountedRef.current = true
     init()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      mountedRef.current = false
+    }
   }, [])
 
   const persist = useCallback(async (updated: ProjectEntry[]) => {
-    const store = storeRef.current
-    if (!store) return
-    await store.set(STORE_KEY, updated)
-    await store.save()
+    if (!mountedRef.current) return
+    await getSlateApi().projects.write(updated)
   }, [])
 
   const addProject = useCallback(async (dirPath: string) => {
@@ -49,7 +52,7 @@ export function useProjectStore() {
           p.path === dirPath ? { ...p, lastOpenedAt: now } : p,
         )
       } else {
-        const name = dirPath.split("/").pop() || dirPath
+        const name = getPathName(dirPath)
         updated = [
           ...prev,
           { path: dirPath, name, lastFile: null, lastOpenedAt: now, favorite: false },

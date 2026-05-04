@@ -1,9 +1,9 @@
 import { useCallback } from "react"
-import { open } from "@tauri-apps/plugin-dialog"
 import { useNavigate } from "@tanstack/react-router"
 import { WelcomeScreen } from "@/components/WelcomeScreen"
 import { useProjectStore, type ProjectEntry } from "@/hooks/useProjectStore"
 import { writeEditorSession } from "@/lib/editorSession"
+import { openProjectDirectory } from "@/lib/fileService"
 
 export function WelcomeRoute() {
   const navigate = useNavigate()
@@ -19,15 +19,12 @@ export function WelcomeRoute() {
   }, [navigate, projectStore])
 
   const handleOpenFolder = useCallback(async () => {
-    const selected = await open({ directory: true, multiple: false })
-    if (!selected) return
+    const result = await openProjectDirectory()
+    if (!result.ok) return
 
-    const dirPath = typeof selected === "string" ? selected : selected[0]
-    if (!dirPath) return
-
-    await projectStore.addProject(dirPath)
+    await projectStore.addProject(result.data)
     writeEditorSession({
-      activeProjectDir: dirPath,
+      activeProjectDir: result.data,
       filePath: null,
     })
     navigate({ to: "/editor" })

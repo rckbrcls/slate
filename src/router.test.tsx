@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { RouterProvider } from "@tanstack/react-router"
 import type { ReactNode } from "react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const mocks = vi.hoisted(() => {
   const initialDocumentState = {
@@ -228,7 +228,11 @@ vi.mock("@/components/Editor", async () => {
       )
 
       React.useEffect(() => {
-        const editor = {
+        const editor: {
+          isDestroyed: boolean
+          state: { doc: unknown }
+          commands: { setContent: (content: unknown) => void }
+        } = {
           isDestroyed: false,
           state: { doc: {} },
           commands: {
@@ -298,6 +302,10 @@ vi.mock("sonner", () => ({
 }))
 
 describe("router hydration", () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   beforeEach(() => {
     vi.resetModules()
     window.location.hash = "#/"

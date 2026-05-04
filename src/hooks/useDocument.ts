@@ -5,10 +5,11 @@ import { editorToFountain } from "@/lib/fountain/serialize"
 import { fountainToEditor } from "@/lib/fountain/deserialize"
 import {
   openFountainFile,
+  readFountainFile,
   saveFountainFile,
   saveAsFountainFile,
 } from "@/lib/fileService"
-import { readTextFile } from "@tauri-apps/plugin-fs"
+import { getPathName } from "@/lib/slateApi"
 import { useFileWatcher } from "@/hooks/useFileWatcher"
 
 interface DocumentState {
@@ -22,8 +23,7 @@ interface DocumentState {
 }
 
 function getFileName(path: string | null) {
-  if (!path) return "Untitled"
-  return path.split("/").pop() || "Untitled"
+  return getPathName(path)
 }
 
 function getEmptyDocument() {
@@ -91,7 +91,7 @@ export function useDocument(editorRef: React.RefObject<Editor | null>) {
   }, [getLiveEditor])
 
   const loadDocument = useCallback(async (path: string) => {
-    const raw = await readTextFile(path)
+    const raw = await readFountainFile(path)
     const { content, titlePage } = fountainToEditor(raw)
     const editor = getLiveEditor()
     if (!editor) return false
@@ -123,7 +123,7 @@ export function useDocument(editorRef: React.RefObject<Editor | null>) {
     }
 
     try {
-      const newFileContent = await readTextFile(state.filePath)
+      const newFileContent = await readFountainFile(state.filePath)
       const editor = getLiveEditor()
       if (!editor) return
       const currentContent = editorToFountain(editor.state.doc, titlePageRef.current)

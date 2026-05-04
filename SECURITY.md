@@ -1,6 +1,6 @@
 # Security Policy
 
-Slate is a local-first desktop screenplay editor. Its primary security concerns are local file access, native shell permissions, user-owned screenplay data, exported documents, and future AI integration boundaries.
+Slate is a local-first desktop screenplay editor. Its primary security concerns are local file access, native IPC boundaries, user-owned screenplay data, exported documents, Git execution, and future AI integration boundaries.
 
 ## Reporting A Vulnerability
 
@@ -30,11 +30,36 @@ Slate does not currently include:
 - Remote AI calls.
 - Cloud file synchronization.
 
-The app runs as a desktop application through Tauri. The renderer coordinates the product workflow, while Tauri plugins provide native access to files, dialogs, local storage, and shell execution.
+The app runs as an Electron desktop application. The renderer owns product workflow, while the Electron main process owns native file dialogs, filesystem access, project metadata persistence, file watching, Git execution, and window security defaults.
+
+The renderer does not receive Node.js integration. Native capabilities are exposed through the typed `window.slate` preload API from `electron/preload/index.ts`.
+
+## Electron Boundary
+
+Relevant files:
+
+- `electron/main/index.ts`
+- `electron/preload/index.ts`
+- `electron/shared/ipc.ts`
+- `electron/shared/types.ts`
+- `src/slate-env.d.ts`
+
+Current desktop defaults include:
+
+- `contextIsolation: true`
+- `nodeIntegration: false`
+- `sandbox: true`
+- `webSecurity: true`
+- denied permission requests by default
+- blocked new-window creation by default
+- navigation prevention outside the loaded app
+- a Content Security Policy injected from the main process
+
+Do not expose generic shell, filesystem, or IPC primitives to the renderer. Add high-level methods to `window.slate` instead.
 
 ## Local File Access
 
-Slate reads and writes user-selected screenplay files through the Tauri FS plugin.
+Slate reads and writes user-selected screenplay files through Electron IPC.
 
 Relevant files:
 
@@ -42,23 +67,20 @@ Relevant files:
 - `src/hooks/useDocument.ts`
 - `src/hooks/useFileExplorer.ts`
 - `src/hooks/useFileWatcher.ts`
-- `src-tauri/capabilities/default.json`
+- `electron/main/index.ts`
 
-Current filesystem permissions in `src-tauri/capabilities/default.json` allow reading, writing, directory reads, and stat operations under `$HOME/**`.
-
-This broad access supports the current prototype workflow, but it should be narrowed before public distribution if possible.
+The current prototype allows the renderer to ask the main process to read and write paths involved in the local project workflow. Review and narrow that policy before public distribution.
 
 ## Project Metadata Persistence
 
-Recent project metadata is stored locally through the Tauri Store plugin.
+Recent project metadata is stored locally in `slate-projects.json` under Electron's `userData` directory.
 
-Relevant file:
+Relevant files:
 
 - `src/hooks/useProjectStore.ts`
+- `electron/main/index.ts`
 
-The store key is `projects`, and the store file is currently loaded as `slate-projects.json`. Stored data includes local paths, project display names, last file paths, timestamps, and favorite flags.
-
-This metadata can reveal local folder names and writing-project locations. Treat it as user-sensitive local data.
+Stored data includes local paths, project display names, last file paths, timestamps, and favorite flags. This metadata can reveal local folder names and writing-project locations. Treat it as user-sensitive local data.
 
 ## Editor Session Persistence
 
@@ -70,37 +92,17 @@ Relevant file:
 
 The key is `slate-editor-session`. It stores only the active project directory and active file path. It does not store screenplay contents.
 
-## Shell Access
+## Git Access
 
-Slate uses the Tauri shell plugin to run the local `git` binary for Git status, history, diffs, commits, and file checkout helpers.
+Slate runs the local `git` binary from the Electron main process for Git status, history, diffs, commits, and file checkout helpers.
 
 Relevant files:
 
+- `electron/main/index.ts`
 - `src/lib/git/commands.ts`
 - `src/hooks/useGit.ts`
-- `src-tauri/capabilities/default.json`
 
-Current shell permissions allow spawning:
-
-```json
-{
-  "name": "git",
-  "cmd": "git",
-  "args": true
-}
-```
-
-Because `args` is currently unrestricted, review every Git command path before expanding shell usage. Do not add additional spawned commands without a dedicated security review.
-
-## Content Security Policy
-
-`src-tauri/tauri.conf.json` currently sets:
-
-```json
-"csp": null
-```
-
-This may be acceptable during early local development, but it is not a strong production security posture. Define an explicit CSP before distributing Slate broadly.
+The renderer can only call high-level Git methods on `window.slate.git`; it cannot pass arbitrary shell commands. Do not add additional spawned commands without a dedicated security review.
 
 ## Clipboard Use
 
@@ -143,9 +145,9 @@ Exported files can contain full screenplay content and title-page contact inform
 
 Before distributing packaged builds:
 
-- Narrow `$HOME/**` filesystem permissions if possible.
-- Restrict shell command arguments if possible.
-- Replace `csp: null` with an explicit CSP.
+- Narrow filesystem IPC policy if possible.
+- Review every Git handler and keep command execution high-level.
+- Confirm Content Security Policy behavior in development and packaged builds.
 - Confirm no stale scaffold metadata misrepresents product identity.
 - Decide how security reports should be submitted.
 - Decide and document project licensing.

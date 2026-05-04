@@ -1,11 +1,12 @@
 # Architecture
 
-Slate is a medium-complexity single desktop application. It has one React/Vite renderer and one Tauri 2 native shell. There is no backend server, database, authentication service, hosted API, or monorepo package boundary in the current repository.
+Slate is a medium-complexity single desktop application. It has one React/Vite renderer and one Electron native shell. There is no backend server, database, authentication service, hosted API, or monorepo package boundary in the current repository.
 
 The main architectural responsibility split is:
 
 - The renderer owns product behavior: screenplay editing, routing, panels, file workflow orchestration, Fountain parsing, pagination, exports, analytics, and UI state.
-- The Tauri shell owns native capabilities: desktop windowing, file-system permissions, native dialogs, local store persistence, shell access for Git, and bundle configuration.
+- The Electron main process owns native capabilities: desktop windowing, file dialogs, filesystem access, file watching, local project metadata persistence, Git execution, IPC handlers, and bundle configuration.
+- The preload script exposes a narrow typed `window.slate` API. The renderer does not receive Node.js APIs.
 
 ## Runtime Overview
 
@@ -14,21 +15,24 @@ flowchart LR
   User["User"]
   Renderer["React/Vite renderer"]
   Editor["Tiptap screenplay editor"]
-  Tauri["Tauri shell"]
+  Preload["Electron preload window.slate"]
+  Main["Electron main process"]
   Disk["Local screenplay files"]
-  Store["Tauri Store"]
+  Store["slate-projects.json"]
   Git["Local git binary"]
   Exports["PDF / FDX exports"]
 
   User --> Renderer
   Renderer --> Editor
-  Renderer --> Tauri
-  Tauri --> Disk
-  Tauri --> Store
-  Tauri --> Git
+  Renderer --> Preload
+  Preload --> Main
+  Main --> Disk
+  Main --> Store
+  Main --> Git
   Editor --> Exports
-  Exports --> Tauri
-  Tauri --> Disk
+  Exports --> Preload
+  Preload --> Main
+  Main --> Disk
 ```
 
 ## Application Flow
@@ -39,9 +43,44 @@ The router is defined in `src/router.tsx` with TanStack Router hash history.
 - `/editor` renders `EditorRoute`.
 - Unknown routes navigate back to `/`.
 
-`WelcomeRoute` lets the user open a project folder through the Tauri dialog plugin. It stores the selected project in `useProjectStore`, writes an editor-session snapshot, and navigates to `/editor`.
+`WelcomeRoute` lets the user open a project folder through `window.slate.openDirectoryDialog`. It stores the selected project in `useProjectStore`, writes an editor-session snapshot, and navigates to `/editor`.
 
 `EditorRoute` restores the last session from `sessionStorage`, opens the last screenplay file when possible, falls back to `untitled.fountain` or another `.fountain`/`.spmd` file in the project folder, and then mounts the editor workspace.
+
+## Electron Layers
+
+### Main Process
+
+`electron/main/index.ts` creates the `BrowserWindow`, installs security defaults, and registers IPC handlers.
+
+Current handler groups:
+
+- native open/save dialogs
+- text and binary file reads/writes
+- directory reads
+- file stat and file watching
+- recent project metadata read/write
+- Git status, root, log, diff, commit, and checkout-file operations
+
+Git is executed with `execFile("git", args, { cwd })`; no generic shell execution is exposed.
+
+### Preload
+
+`electron/preload/index.ts` exposes `window.slate` through `contextBridge`.
+
+The public contract lives in:
+
+- `electron/shared/types.ts`
+- `electron/shared/ipc.ts`
+- `src/slate-env.d.ts`
+
+Renderer code should call `src/lib/fileService.ts`, `src/lib/git/commands.ts`, or `useProjectStore` instead of invoking IPC directly.
+
+### Renderer
+
+The renderer entrypoint is still `src/main.tsx`. It is bundled by the renderer section of `electron.vite.config.ts` and can also be served alone through `vite.config.ts` for renderer-only work.
+
+`index.html` includes `translate="no"`, `class="notranslate"`, and the Google `notranslate` meta tag so browser translation tools do not mutate the React DOM.
 
 ## Renderer Layers
 
@@ -93,39 +132,12 @@ This design keeps screenplay structure typed inside ProseMirror instead of relyi
 Important renderer state is organized through hooks and services:
 
 - `src/hooks/useDocument.ts` manages the active document, dirty state, title page, autosave, reloads, file open/save, and external-change behavior.
-- `src/hooks/useFileWatcher.ts` polls the active file with Tauri FS `stat`.
+- `src/hooks/useFileWatcher.ts` subscribes to main-process file watch events for the active file.
 - `src/hooks/useFileExplorer.ts` reads local folders and filters noisy directories.
-- `src/hooks/useProjectStore.ts` persists recent projects with Tauri Store.
+- `src/hooks/useProjectStore.ts` persists recent projects through `window.slate.projects`.
 - `src/hooks/useGit.ts` reads Git status and history through `src/lib/git/commands.ts`.
-- `src/lib/fileService.ts` wraps Tauri dialog and FS calls for document and export operations.
+- `src/lib/fileService.ts` wraps `window.slate` file, dialog, directory, watch, and export-write operations.
 - `src/lib/editorSession.ts` stores route restoration state in `sessionStorage`.
-
-## Native Shell
-
-The native shell is intentionally small. `src-tauri/src/lib.rs` initializes:
-
-- `tauri-plugin-fs`
-- `tauri-plugin-dialog`
-- `tauri-plugin-shell`
-- `tauri-plugin-store`
-- `tauri-plugin-log` in debug builds
-
-`src-tauri/src/main.rs` only starts the Tauri app and suppresses the extra Windows console in release builds.
-
-The shell currently does not implement custom Rust commands, background workers, database access, authentication, cloud sync, or AI execution. Product behavior is in the TypeScript renderer.
-
-## Permissions
-
-`src-tauri/capabilities/default.json` is the most important native security file. It currently grants:
-
-- Default core permissions.
-- Tauri FS read, write, read-dir, and stat permissions under `$HOME/**`.
-- Dialog permissions.
-- Store permissions.
-- Shell permissions.
-- Permission to spawn the local `git` command with unrestricted arguments.
-
-These permissions match the current local-first editor and Git-history workflow, but they are broad and should be reviewed before distributing packaged builds.
 
 ## Data And Persistence
 
@@ -133,23 +145,23 @@ Slate does not use a database. Current persistence is:
 
 | Data | Storage |
 | --- | --- |
-| Screenplay contents | Local user-selected files through Tauri FS |
-| Recent projects | Tauri Store file `slate-projects.json` |
+| Screenplay contents | Local user-selected files through Electron IPC |
+| Recent projects | `slate-projects.json` under Electron `userData` |
 | Current editor session | Browser `sessionStorage` key `slate-editor-session` |
 | Git state | Read on demand from the local `git` binary |
-| Exported PDF/FDX files | User-selected paths through Tauri save dialogs |
+| Exported PDF/FDX files | User-selected paths through Electron save dialogs |
 
 ## Screenplay Data Flow
 
 ```mermaid
 flowchart TD
   Open["Open file or project folder"]
-  Read["Tauri FS reads Fountain text"]
+  Read["window.slate reads Fountain text"]
   Parse["fountainToEditor parses Fountain tokens"]
   Doc["Tiptap / ProseMirror document"]
   Edit["User edits typed screenplay nodes"]
   Serialize["editorToFountain serializes document"]
-  Save["Tauri FS writes screenplay file"]
+  Save["window.slate writes screenplay file"]
   ExportPDF["generatePDF creates PDF buffer"]
   ExportFDX["editorToFDX creates Final Draft XML"]
 
@@ -162,19 +174,6 @@ flowchart TD
   Edit --> ExportPDF
   Edit --> ExportFDX
 ```
-
-## Analysis Flow
-
-Stats and analytics are calculated locally from the current ProseMirror document:
-
-- `src/lib/stats.ts` counts pages, scenes, words, dialogue/action ratio, and unique characters.
-- `src/lib/analytics/characters.ts` analyzes character line counts, dialogue words, scene appearances, and co-occurrence.
-- `src/lib/analytics/pacing.ts` maps dialogue/action density by page.
-- `src/lib/analytics/readability.ts` computes dialogue readability using `syllable`.
-- `src/lib/analytics/beatsheet.ts` maps Save the Cat style beat targets to page counts.
-- `src/lib/analytics/bechdel.ts` evaluates Bechdel criteria when supplied with user-provided character gender labels.
-
-There is no remote analytics service.
 
 ## Export Architecture
 
@@ -193,5 +192,4 @@ Both export paths are invoked from `EditorRoute` and written to disk through `sr
 - No external AI service is called by the app.
 - No CI/CD or hosted deployment configuration is committed.
 - No signing, notarization, release channel, or auto-update policy is configured.
-- Tauri `csp` is currently set to `null` in `src-tauri/tauri.conf.json`.
-- The broad `$HOME/**` filesystem permission and unrestricted Git arguments are practical for the prototype but should be narrowed before broader distribution.
+- The Electron IPC bridge should be reviewed and narrowed before broader distribution.

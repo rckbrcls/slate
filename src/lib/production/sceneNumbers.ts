@@ -26,8 +26,10 @@ export function autoNumberScenes(doc: PmNode): Map<number, string> {
  */
 export function insertSceneNumber(
   beforeNumber: string,
-  _afterNumber: string,
+  afterNumber: string,
 ): string {
+  void afterNumber
+
   // Extract numeric prefix and optional letter suffix
   const beforeMatch = beforeNumber.match(/^(\d+)([A-Z]*)$/)
   if (!beforeMatch) return beforeNumber + "A"

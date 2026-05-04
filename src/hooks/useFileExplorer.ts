@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react"
-import { readDir } from "@tauri-apps/plugin-fs"
+import { getPathDir } from "@/lib/slateApi"
+import { readDirectory } from "@/lib/fileService"
 
 export interface FileNode {
   name: string
@@ -18,9 +19,7 @@ export interface UseFileExplorerReturn {
 }
 
 function deriveProjectDir(filePath: string | null): string | null {
-  if (!filePath) return null
-  const lastSlash = filePath.lastIndexOf("/")
-  return lastSlash > 0 ? filePath.substring(0, lastSlash) : null
+  return getPathDir(filePath)
 }
 
 function sortNodes(nodes: FileNode[]): FileNode[] {
@@ -50,12 +49,12 @@ export function useFileExplorer(filePath: string | null, explicitProjectDir?: st
 
   const loadDirectory = useCallback(async (dirPath: string): Promise<FileNode[]> => {
     try {
-      const entries = await readDir(dirPath)
+      const entries = await readDirectory(dirPath)
       const nodes: FileNode[] = entries
         .filter((e) => !HIDDEN_ENTRIES.has(e.name))
         .map((entry) => ({
           name: entry.name,
-          path: `${dirPath}/${entry.name}`,
+          path: entry.path,
           isDirectory: entry.isDirectory,
           children: entry.isDirectory ? undefined : undefined,
           expanded: false,
