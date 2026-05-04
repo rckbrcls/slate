@@ -12,13 +12,13 @@ No production paginated editor relies on browser contentEditable for layout. Eac
 
 **OnlyOffice** took an even more extreme approach: full canvas rendering from inception, with a custom font metrics engine that bypasses the browser entirely. Their developers explicitly rejected browser font measurement as "inaccurate and inconsistent across browsers" and built their own text rendering pipeline. The pagination mimics desktop word processors: only visible pages are rendered, with incremental layout recalculation. Their OOXML-native document model means the same layout engine handles editing, preview, and export with claimed "100% fidelity."
 
-**CKEditor 5** is the closest analog to what you're building — it uses a DOM-based single contenteditable with a pagination overlay. Their commercial pagination plugin measures content heights using configured page dimensions and injects visual page-break markers into the editor view. Critically, it only works reliably in Blink-based browsers (Chrome/Edge) because it depends on the browser's text layout engine for height calculations, and **Firefox produces different results**. Since Tauri on Windows uses WebView2 (Chromium) and macOS/Linux use WebKit, this cross-engine inconsistency is directly relevant.
+**CKEditor 5** is the closest analog to what you're building — it uses a DOM-based single contenteditable with a pagination overlay. Their commercial pagination plugin measures content heights using configured page dimensions and injects visual page-break markers into the editor view. Critically, it only works reliably in Blink-based browsers (Chrome/Edge) because it depends on the browser's text layout engine for height calculations, and **Firefox produces different results**. Since Electron uses Chromium across desktop platforms, Slate can target one browser engine for editing-time pagination instead of accepting WebView engine drift per OS.
 
 **Collabora Online** (LibreOffice Web) sidesteps the problem entirely: documents are rendered server-side by the full LibreOffice C++ layout engine, and the browser receives pre-rendered image tiles via WebSocket, composited onto a canvas using Leaflet (the map library). Pagination is handled by the same code that runs in desktop LibreOffice.
 
 **Fidus Writer**, built on ProseMirror for academic writing, attempted CSS Regions-based pagination in 2012-2013. When Chromium removed CSS Regions support, the approach died. Creator Johannes Wilm eventually gave up on editing-time pagination entirely, concluding it "is not that important for our users" — pagination now happens only at export time via Vivliostyle.
 
-The key takeaway: **canvas-based editors (Google Docs, OnlyOffice) achieve pixel-perfect pagination but require enormous engineering investment. DOM-based editors (CKEditor) achieve "good enough" pagination with measurement-based overlays but face cross-browser inconsistencies.** For a Tauri app with a single target WebView per platform, the DOM-based measurement approach is viable and dramatically simpler.
+The key takeaway: **canvas-based editors (Google Docs, OnlyOffice) achieve pixel-perfect pagination but require enormous engineering investment. DOM-based editors (CKEditor) achieve "good enough" pagination with measurement-based overlays but face cross-browser inconsistencies.** For an Electron app with a consistent Chromium runtime, the DOM-based measurement approach is viable and dramatically simpler.
 
 ---
 
@@ -183,9 +183,9 @@ The CSS "strut" — an invisible zero-width character at the start of every line
 
 ### Lock the zoom and own the scaling
 
-**Disable browser zoom in Tauri** using `zoom_hotkeys_enabled: false` in `WebviewBuilder` and disable pinch zoom (on Windows: `--disable-pinch` via `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`). Implement your own zoom via `transform: scale()` on the document container. This keeps all internal measurements in a stable CSS pixel coordinate system. `getBoundingClientRect()` returns post-transform values, so if you need raw measurements, divide by the current scale factor.
+**Disable browser zoom in Electron** through `webContents.setVisualZoomLevelLimits(1, 1)`, menu accelerator control, and app-level zoom shortcuts. Implement your own zoom via `transform: scale()` on the document container. This keeps all internal measurements in a stable CSS pixel coordinate system. `getBoundingClientRect()` returns post-transform values, so if you need raw measurements, divide by the current scale factor.
 
-Tauri 2.0's `set_zoom()` API can also set the WebView zoom programmatically. Listen for `onScaleChanged` events to detect when the window moves between monitors with different DPI.
+Electron's `webFrame.setZoomFactor()` and `webContents.setZoomFactor()` can also set the Chromium zoom programmatically, but pagination should prefer app-owned document scaling so measurement remains stable across monitors and user shortcuts.
 
 ### Use ProseMirror's transaction hooks, not DOM observers
 
@@ -217,9 +217,9 @@ function schedulePagination(fromPageIndex = 0) {
 
 ## Concrete implementation recommendation
 
-For a Tauri 2.0 + React + Tiptap v2 screenplay editor, the architecture should be:
+For an Electron + React + Tiptap screenplay editor, the architecture should be:
 
-**Single Tiptap editor** with a custom screenplay schema (scene-heading, action, character, dialogue, parenthetical, transition nodes). A `PaginationPlugin` implemented as a ProseMirror `StateField` returns a `DecorationSet` with widget decorations at page break positions. Page dimensions fixed at **816×1056 CSS pixels**. A hidden measurement div with matching CSS provides node height calculations free from the decoration feedback loop. Screenplay-specific constraint rules (orphan prevention, dialogue splitting with MORE/CONT'D, sentence-boundary breaks) applied as a post-processing pass over the initial break positions. Font: bundled Courier Prime at `font-size: 16px; line-height: 20px`. Zoom: locked in Tauri, custom zoom via `transform: scale()`.
+**Single Tiptap editor** with a custom screenplay schema (scene-heading, action, character, dialogue, parenthetical, transition nodes). A `PaginationPlugin` implemented as a ProseMirror `StateField` returns a `DecorationSet` with widget decorations at page break positions. Page dimensions fixed at **816×1056 CSS pixels**. A hidden measurement div with matching CSS provides node height calculations free from the decoration feedback loop. Screenplay-specific constraint rules (orphan prevention, dialogue splitting with MORE/CONT'D, sentence-boundary breaks) applied as a post-processing pass over the initial break positions. Font: bundled Courier Prime at `font-size: 16px; line-height: 20px`. Zoom: locked in Electron, custom zoom via `transform: scale()`.
 
 This architecture is proven by Ben Cahan's screenplay editor, aligns with CKEditor's commercial pagination approach, and is the only approach that combines ProseMirror's native editing experience with content-aware screenplay pagination rules. Celtx — the major production screenplay editor built on ProseMirror — uses a node-splitting variant, but the widget decoration approach is simpler to implement and maintain while achieving equivalent results for the screenplay use case where page structure doesn't need to persist in the document model (since no screenplay format stores pagination).
 
