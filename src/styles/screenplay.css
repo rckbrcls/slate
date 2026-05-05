@@ -47,6 +47,13 @@
   position: relative;
   width: var(--page-width);
   min-height: var(--page-stack-height);
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.screenplay-zoom-frame {
+  position: relative;
+  flex: 0 0 auto;
 }
 
 .screenplay-page-stack {

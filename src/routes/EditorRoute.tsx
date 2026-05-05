@@ -1,27 +1,39 @@
-import { useEffect, useRef, useCallback, useState } from "react"
+import { useEffect, useRef, useCallback, useState, type WheelEvent } from "react"
 import type { Editor as TiptapEditor } from "@tiptap/core"
 import { useNavigate } from "@tanstack/react-router"
+import { usePanelRef, type PanelSize } from "react-resizable-panels"
 import { Editor } from "@/components/Editor"
 import { ScreenplayPageStack } from "@/components/ScreenplayPageStack"
 import { Toolbar } from "@/components/Toolbar"
+import type { ScreenplayElementType } from "@/components/Toolbar"
 import { StatsBar } from "@/components/StatsBar"
 import { TitlePageView } from "@/components/TitlePageView"
-import { AISidePanel } from "@/components/AISidePanel"
 import { StatsSidePanel } from "@/components/StatsSidePanel"
 import { FileExplorer } from "@/components/FileExplorer"
 import { GitHistory } from "@/components/GitHistory"
-import { useFileExplorer } from "@/hooks/useFileExplorer"
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
+import { useFileExplorer, type FileNode } from "@/hooks/useFileExplorer"
 import { useProjectStore } from "@/hooks/useProjectStore"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { ExpandableScreen, ExpandableScreenContent } from "@/components/ui/expandable-screen"
+import { ChevronLeft } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useDocument } from "@/hooks/useDocument"
 import { useGit } from "@/hooks/useGit"
 import { pageNumbersPluginKey } from "@/extensions/PageNumbers"
 import { paginate, type PaginationResult } from "@/lib/pagination"
 import { calculateStats, type ScreenplayStats } from "@/lib/stats"
 import { editorToFDX, generatePDF } from "@/lib/export"
-import { readDirectory, saveExportFile, saveBinaryFile } from "@/lib/fileService"
+import {
+  copyPathToClipboard,
+  duplicateFile,
+  movePathToTrash,
+  readDirectory,
+  renamePath,
+  revealPath,
+  saveBinaryFile,
+  saveExportFile,
+} from "@/lib/fileService"
 import { getPathDir, isPathInsideDirectory } from "@/lib/slateApi"
 import {
   applyAutoNumbering,
@@ -37,13 +49,102 @@ import {
   readEditorSession,
   writeEditorSession,
 } from "@/lib/editorSession"
+import {
+  PAPER_ZOOM_DEFAULT,
+  PAPER_ZOOM_MAX,
+  PAPER_ZOOM_MIN,
+  PAPER_ZOOM_STORAGE_KEY,
+  clampPaperZoom,
+  getNextPaperZoomFromWheel,
+  resetPaperZoom,
+  shouldHandlePaperZoomWheel,
+  stepPaperZoom,
+} from "@/lib/paperZoom"
 import { toast } from "sonner"
 
 function deriveProjectDir(filePath: string | null) {
   return getPathDir(filePath)
 }
 
+function replaceOpenPathPrefix(filePath: string, fromPath: string, toPath: string) {
+  if (filePath === fromPath) return toPath
+
+  if (
+    filePath.startsWith(`${fromPath}/`) ||
+    filePath.startsWith(`${fromPath}\\`)
+  ) {
+    return `${toPath}${filePath.slice(fromPath.length)}`
+  }
+
+  return filePath
+}
+
 const SCREENPLAY_EXTENSIONS = new Set(["fountain", "spmd"])
+type EditorView = "editor" | "statistics"
+const FILE_EXPLORER_DEFAULT_WIDTH = 250
+const FILE_EXPLORER_MIN_WIDTH = 220
+const FILE_EXPLORER_MAX_WIDTH = 420
+const FILE_EXPLORER_WIDTH_STORAGE_KEY = "slate.editor.fileExplorerWidth.v1"
+
+function clampFileExplorerWidth(width: number) {
+  return Math.min(
+    FILE_EXPLORER_MAX_WIDTH,
+    Math.max(FILE_EXPLORER_MIN_WIDTH, Math.round(width)),
+  )
+}
+
+function readStoredFileExplorerWidth() {
+  if (typeof window === "undefined") return FILE_EXPLORER_DEFAULT_WIDTH
+
+  try {
+    const storedWidth = window.localStorage.getItem(FILE_EXPLORER_WIDTH_STORAGE_KEY)
+    if (!storedWidth) return FILE_EXPLORER_DEFAULT_WIDTH
+
+    const parsedWidth = Number(storedWidth)
+    if (!Number.isFinite(parsedWidth)) return FILE_EXPLORER_DEFAULT_WIDTH
+
+    return clampFileExplorerWidth(parsedWidth)
+  } catch {
+    return FILE_EXPLORER_DEFAULT_WIDTH
+  }
+}
+
+function writeStoredFileExplorerWidth(width: number) {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(
+      FILE_EXPLORER_WIDTH_STORAGE_KEY,
+      String(clampFileExplorerWidth(width)),
+    )
+  } catch {
+    // Local storage is best-effort; resizing should keep working without it.
+  }
+}
+
+function readStoredPaperZoom() {
+  if (typeof window === "undefined") return PAPER_ZOOM_DEFAULT
+
+  try {
+    const storedZoom = window.localStorage.getItem(PAPER_ZOOM_STORAGE_KEY)
+    if (!storedZoom) return PAPER_ZOOM_DEFAULT
+
+    const parsedZoom = Number(storedZoom)
+    return clampPaperZoom(parsedZoom)
+  } catch {
+    return PAPER_ZOOM_DEFAULT
+  }
+}
+
+function writeStoredPaperZoom(zoom: number) {
+  if (typeof window === "undefined") return
+
+  try {
+    window.localStorage.setItem(PAPER_ZOOM_STORAGE_KEY, String(clampPaperZoom(zoom)))
+  } catch {
+    // Local storage is best-effort; paper zoom should keep working without it.
+  }
+}
 
 async function findDefaultScreenplayFile(projectDir: string) {
   try {
@@ -74,6 +175,9 @@ export function EditorRoute() {
   const initialSession = initialSessionRef.current
   const canRestoreSession = hasEditorSession(initialSession)
   const editorRef = useRef<TiptapEditor | null>(null)
+  const fileExplorerPanelRef = usePanelRef()
+  const initialFileExplorerWidthRef = useRef(readStoredFileExplorerWidth())
+  const fileExplorerWidthRef = useRef(initialFileExplorerWidthRef.current)
   const isRouteMountedRef = useRef(true)
   const pendingFileRef = useRef<string | null>(initialSession?.filePath ?? null)
   const restoreAttemptedRef = useRef(false)
@@ -84,9 +188,9 @@ export function EditorRoute() {
   const [stats, setStats] = useState<ScreenplayStats | null>(null)
   const [pagination, setPagination] = useState<PaginationResult | null>(null)
   const [showTitlePage, setShowTitlePage] = useState(false)
-  const [showAI, setShowAI] = useState(false)
-  const [showStats, setShowStats] = useState(false)
+  const [activeView, setActiveView] = useState<EditorView>("editor")
   const [showFileExplorer, setShowFileExplorer] = useState(true)
+  const [paperZoom, setPaperZoom] = useState(readStoredPaperZoom)
 
   const projectStore = useProjectStore()
   const { updateLastFile } = projectStore
@@ -104,6 +208,7 @@ export function EditorRoute() {
     markDirty,
     openFile,
     openFilePath,
+    updateFilePath,
     saveFile,
     saveAsFile,
     reloadFromDisk,
@@ -113,7 +218,11 @@ export function EditorRoute() {
 
   const fileExplorer = useFileExplorer(filePath, activeProjectDir)
   const git = useGit(fileExplorer.projectDir)
+  const refreshFileExplorer = fileExplorer.refresh
   const visualPageCount = Math.max(pagination?.totalPages ?? 1, 1)
+  const canZoomIn = paperZoom < PAPER_ZOOM_MAX
+  const canZoomOut = paperZoom > PAPER_ZOOM_MIN
+  const canResetZoom = paperZoom !== PAPER_ZOOM_DEFAULT
 
   const updateStats = useCallback(() => {
     const editor = editorRef.current
@@ -133,11 +242,99 @@ export function EditorRoute() {
     updateStats()
   }, [consumeProgrammaticContentUpdate, markDirty, updateStats])
 
+  const handleToggleFileExplorer = useCallback(() => {
+    setShowFileExplorer((visible) => !visible)
+  }, [])
+
+  const handleCloseFileExplorer = useCallback(() => {
+    setShowFileExplorer(false)
+  }, [])
+
+  const handleFileExplorerResize = useCallback((panelSize: PanelSize) => {
+    if (panelSize.inPixels <= 0) return
+
+    const nextWidth = clampFileExplorerWidth(panelSize.inPixels)
+    fileExplorerWidthRef.current = nextWidth
+    writeStoredFileExplorerWidth(nextWidth)
+  }, [])
+
+  const handleZoomIn = useCallback(() => {
+    setPaperZoom((currentZoom) => stepPaperZoom(currentZoom, 1))
+  }, [])
+
+  const handleZoomOut = useCallback(() => {
+    setPaperZoom((currentZoom) => stepPaperZoom(currentZoom, -1))
+  }, [])
+
+  const handleResetZoom = useCallback(() => {
+    setPaperZoom(resetPaperZoom())
+  }, [])
+
+  const handlePaperWheel = useCallback((event: WheelEvent<HTMLElement>) => {
+    if (!shouldHandlePaperZoomWheel(event)) return
+
+    const currentZoom = clampPaperZoom(paperZoom)
+    const nextZoom = getNextPaperZoomFromWheel(currentZoom, event.deltaY)
+    const scrollContainer = event.currentTarget
+    const viewportRect = scrollContainer.getBoundingClientRect()
+    const viewportX = event.clientX - viewportRect.left
+    const viewportY = event.clientY - viewportRect.top
+    const scrollLeft = scrollContainer.scrollLeft
+    const scrollTop = scrollContainer.scrollTop
+    const zoomFrame = scrollContainer.querySelector<HTMLElement>(".screenplay-zoom-frame")
+    const frameLeft = zoomFrame?.offsetLeft ?? 0
+    const frameTop = zoomFrame?.offsetTop ?? 0
+    const paperX = (scrollLeft + viewportX - frameLeft) / currentZoom
+    const paperY = (scrollTop + viewportY - frameTop) / currentZoom
+
+    event.preventDefault()
+
+    if (nextZoom === currentZoom) return
+
+    setPaperZoom(nextZoom)
+
+    const restoreScrollPosition = () => {
+      const nextFrameLeft = zoomFrame?.offsetLeft ?? frameLeft
+      const nextFrameTop = zoomFrame?.offsetTop ?? frameTop
+
+      scrollContainer.scrollLeft = paperX * nextZoom + nextFrameLeft - viewportX
+      scrollContainer.scrollTop = paperY * nextZoom + nextFrameTop - viewportY
+    }
+
+    if (typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(restoreScrollPosition)
+      return
+    }
+
+    window.setTimeout(restoreScrollPosition, 0)
+  }, [paperZoom])
+
   useEffect(() => {
     return () => {
       isRouteMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    writeStoredPaperZoom(paperZoom)
+  }, [paperZoom])
+
+  useEffect(() => {
+    const panel = fileExplorerPanelRef.current
+    if (!panel) return
+
+    const timeoutId = window.setTimeout(() => {
+      if (showFileExplorer) {
+        panel.expand()
+        panel.resize(fileExplorerWidthRef.current)
+        return
+      }
+
+      panel.collapse()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [fileExplorerPanelRef, showFileExplorer])
 
   useEffect(() => {
     if (!canRestoreSession) {
@@ -228,6 +425,84 @@ export function EditorRoute() {
       return deriveProjectDir(path)
     })
   }, [openFilePath])
+
+  const handleRenameExplorerEntry = useCallback(async (
+    node: FileNode,
+    nextName: string,
+  ) => {
+    const result = await renamePath(node.path, nextName)
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+
+    await refreshFileExplorer({ from: node.path, to: result.data })
+
+    if (filePath && isPathInsideDirectory(filePath, node.path)) {
+      updateFilePath(replaceOpenPathPrefix(filePath, node.path, result.data))
+    }
+
+    toast.success("Renamed")
+    return true
+  }, [filePath, refreshFileExplorer, updateFilePath])
+
+  const handleDuplicateExplorerFile = useCallback(async (node: FileNode) => {
+    const result = await duplicateFile(node.path)
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+
+    await refreshFileExplorer()
+    toast.success("File duplicated")
+    return true
+  }, [refreshFileExplorer])
+
+  const handleMoveExplorerEntryToTrash = useCallback(async (node: FileNode) => {
+    const affectsOpenFile = Boolean(
+      filePath && isPathInsideDirectory(filePath, node.path),
+    )
+
+    if (affectsOpenFile && isDirty) {
+      toast.error("Save or discard changes before moving the open file to Trash")
+      return false
+    }
+
+    const result = await movePathToTrash(node.path)
+    if (!result.ok) {
+      toast.error(result.error)
+      return false
+    }
+
+    await refreshFileExplorer()
+
+    if (affectsOpenFile) {
+      newFile()
+      if (activeProjectDir) {
+        updateLastFile(activeProjectDir, null)
+      }
+    }
+
+    toast.success("Moved to Trash")
+    return true
+  }, [activeProjectDir, filePath, isDirty, newFile, refreshFileExplorer, updateLastFile])
+
+  const handleRevealExplorerEntry = useCallback(async (node: FileNode) => {
+    const result = await revealPath(node.path)
+    if (!result.ok) {
+      toast.error(result.error)
+    }
+  }, [])
+
+  const handleCopyExplorerPath = useCallback(async (node: FileNode) => {
+    const result = await copyPathToClipboard(node.path)
+    if (result.ok) {
+      toast.success("Path copied")
+      return
+    }
+
+    toast.error(result.error)
+  }, [])
 
   const handleEditorReady = useCallback((editor: TiptapEditor) => {
     editorRef.current = editor
@@ -375,6 +650,18 @@ export function EditorRoute() {
     toast.success("Scene numbers cleared")
   }, [])
 
+  const handleSetScreenplayElement = useCallback((element: ScreenplayElementType) => {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.chain().focus().setNode(element).run()
+  }, [])
+
+  const handleInsertPageBreak = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.chain().focus().insertContent({ type: "pageBreak" }).run()
+  }, [])
+
   const handleSetRevisionColor = useCallback((color: RevisionColorIndex) => {
     const editor = editorRef.current
     if (!editor) return
@@ -402,11 +689,21 @@ export function EditorRoute() {
         hasTitlePage={Object.keys(titlePage).length > 0}
         onExportPDF={handleExportPDF}
         onExportFDX={handleExportFDX}
-        onToggleAI={() => setShowAI(!showAI)}
-        showAI={showAI}
-        onOpenStats={() => setShowStats(true)}
-        onToggleFileExplorer={() => setShowFileExplorer(!showFileExplorer)}
+        onOpenStats={() =>
+          setActiveView((view) => (view === "statistics" ? "editor" : "statistics"))
+        }
+        showStats={activeView === "statistics"}
+        paperZoom={paperZoom}
+        canZoomIn={canZoomIn}
+        canZoomOut={canZoomOut}
+        canResetZoom={canResetZoom}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onResetZoom={handleResetZoom}
+        onToggleFileExplorer={handleToggleFileExplorer}
         showFileExplorer={showFileExplorer}
+        onSetScreenplayElement={handleSetScreenplayElement}
+        onInsertPageBreak={handleInsertPageBreak}
         onAutoNumber={handleAutoNumber}
         onLockScenes={handleLockScenes}
         onUnlockScenes={handleUnlockScenes}
@@ -449,65 +746,119 @@ export function EditorRoute() {
         </Alert>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {showFileExplorer && (
-          <div className="flex w-[250px] shrink-0 flex-col border-r border-border">
-            <FileExplorer
-              tree={fileExplorer.tree}
-              projectDir={fileExplorer.projectDir}
-              loading={fileExplorer.loading}
-              onToggleFolder={fileExplorer.toggleFolder}
-              onOpenFile={handleOpenFilePath}
-              currentFilePath={filePath}
-              gitStatus={git.isRepo ? git.status : undefined}
-            />
-            {git.isRepo && <GitHistory log={git.log} currentFile={filePath} />}
-          </div>
-        )}
+      {activeView === "editor" && (
+        <ResizablePanelGroup
+          id="editor-file-explorer-layout"
+          orientation="horizontal"
+          resizeTargetMinimumSize={{ coarse: 28, fine: 8 }}
+          className="flex min-h-0 flex-1 overflow-hidden px-3"
+        >
+          <ResizablePanel
+            id="file-explorer-panel"
+            panelRef={fileExplorerPanelRef}
+            collapsible
+            collapsedSize={0}
+            defaultSize={initialFileExplorerWidthRef.current}
+            minSize={FILE_EXPLORER_MIN_WIDTH}
+            maxSize={FILE_EXPLORER_MAX_WIDTH}
+            groupResizeBehavior="preserve-pixel-size"
+            onResize={handleFileExplorerResize}
+            data-state={showFileExplorer ? "open" : "closed"}
+            data-sidebar-default-width={initialFileExplorerWidthRef.current}
+            className="min-w-0"
+          >
+            <div className="flex h-full w-full min-w-0 py-3">
+              <div
+                data-state={showFileExplorer ? "open" : "closed"}
+                className="flex h-full w-full min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/70 bg-card transition-[opacity,transform,border-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] data-[state=closed]:pointer-events-none data-[state=closed]:-translate-x-3 data-[state=closed]:border-transparent data-[state=closed]:opacity-0 data-[state=open]:translate-x-0 data-[state=open]:opacity-100"
+              >
+                <FileExplorer
+                  tree={fileExplorer.tree}
+                  projectDir={fileExplorer.projectDir}
+                  loading={fileExplorer.loading}
+                  onToggleFolder={fileExplorer.toggleFolder}
+                  onOpenFile={handleOpenFilePath}
+                  currentFilePath={filePath}
+                  gitStatus={git.isRepo ? git.status : undefined}
+                  onRenameEntry={handleRenameExplorerEntry}
+                  onDuplicateFile={handleDuplicateExplorerFile}
+                  onMoveToTrash={handleMoveExplorerEntryToTrash}
+                  onRevealEntry={handleRevealExplorerEntry}
+                  onCopyPath={handleCopyExplorerPath}
+                  headerAction={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Close Sidebar"
+                      title="Close Sidebar"
+                      onClick={handleCloseFileExplorer}
+                      className="-mr-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <ChevronLeft className="size-3.5" />
+                    </Button>
+                  }
+                />
+                {git.isRepo && <GitHistory log={git.log} currentFile={filePath} />}
+              </div>
+            </div>
+          </ResizablePanel>
 
-        <main className="relative flex flex-1 justify-center overflow-auto bg-muted/30 p-8">
-          {showTitlePage && (
-            <TitlePageView
-              titlePage={titlePage}
-              visible={showTitlePage}
-              onClose={() => setShowTitlePage(false)}
-            />
-          )}
-          <ScreenplayPageStack totalPages={visualPageCount} hidden={showTitlePage}>
-            <Editor
-              onUpdate={handleUpdate}
-              onPaginationUpdate={updateStats}
-              onEditorReady={handleEditorReady}
-              onEditorDestroy={handleEditorDestroy}
-            />
-          </ScreenplayPageStack>
-        </main>
+          <ResizableHandle
+            id="file-explorer-resize-handle"
+            aria-label="Resize File Explorer"
+            aria-hidden={!showFileExplorer}
+            disabled={!showFileExplorer}
+            withHandle={false}
+            className={cn(
+              "mx-1 bg-transparent transition-[opacity,width] duration-200 after:w-2 hover:bg-transparent",
+              !showFileExplorer && "pointer-events-none mx-0 w-0 opacity-0 after:w-0",
+            )}
+          />
 
-        {showAI && (
-          <div className="flex w-[350px] shrink-0 border-l border-border">
-            <AISidePanel
-              externalChangePending={externalChangePending}
-              onReloadFromDisk={() => void handleReloadFromDisk()}
-            />
-          </div>
-        )}
-      </div>
+          <ResizablePanel id="editor-content-panel" minSize={0} className="min-w-0">
+            <main
+              data-testid="editor-paper-scroll-container"
+              className="relative h-full min-h-0 w-full overflow-auto bg-background p-8"
+              onWheel={handlePaperWheel}
+            >
+              {showTitlePage && (
+                <TitlePageView
+                  titlePage={titlePage}
+                  visible={showTitlePage}
+                  onClose={() => setShowTitlePage(false)}
+                />
+              )}
+              <div className="flex w-max min-w-full justify-center">
+                <ScreenplayPageStack
+                  totalPages={visualPageCount}
+                  hidden={showTitlePage}
+                  zoom={paperZoom}
+                >
+                  <Editor
+                    onUpdate={handleUpdate}
+                    onPaginationUpdate={updateStats}
+                    onEditorReady={handleEditorReady}
+                    onEditorDestroy={handleEditorDestroy}
+                  />
+                </ScreenplayPageStack>
+              </div>
+            </main>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      )}
 
-      <ExpandableScreen
-        expanded={showStats}
-        onExpandChange={setShowStats}
-        layoutId="stats-overlay"
-      >
-        <ExpandableScreenContent className="bg-background" closeButtonClassName="text-foreground hover:bg-muted">
+      {activeView === "statistics" && (
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <StatsSidePanel
             editor={editorRef.current}
             stats={stats}
             pagination={pagination}
           />
-        </ExpandableScreenContent>
-      </ExpandableScreen>
+        </div>
+      )}
 
-      <StatsBar stats={stats} />
+      {activeView === "editor" && <StatsBar stats={stats} />}
     </div>
   )
 }

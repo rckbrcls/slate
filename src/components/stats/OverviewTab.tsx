@@ -6,7 +6,6 @@ import {
   Users,
   MessageSquare,
   Maximize2,
-  Timer,
 } from "lucide-react"
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
 import { motion } from "motion/react"
@@ -96,51 +95,35 @@ export function OverviewTab({ stats, pacingData }: OverviewTabProps) {
       variants={stagger}
       initial="hidden"
       animate="show"
-      className="space-y-4"
+      className="space-y-3"
     >
-      {/* Hero Metrics */}
-      <motion.div variants={fadeUp} className="grid grid-cols-2 gap-3">
-        <Card className="p-0">
-          <CardContent className="px-4 py-3">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <FileText className="size-3.5" />
-              <span className="text-xs">Runtime</span>
-            </div>
-            <p className="text-3xl font-bold tracking-tight">
-              {stats.pages}
-              <span className="text-sm font-normal text-muted-foreground ml-1">
-                pages
-              </span>
-            </p>
-            <div className="flex items-center gap-1 mt-1 text-muted-foreground">
-              <Clock className="size-3" />
-              <span className="text-xs">~{stats.estimatedMinutes} min</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="p-0">
-          <CardContent className="px-4 py-3">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <MessageSquare className="size-3.5" />
-              <span className="text-xs">Words</span>
-            </div>
-            <p className="text-3xl font-bold tracking-tight">
-              {stats.words.toLocaleString()}
-            </p>
-            <div className="flex items-center gap-1.5 mt-1">
-              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                {stats.dialogueWords.toLocaleString()} dialogue
-              </Badge>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                {stats.actionWords.toLocaleString()} action
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
+      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-3">
+        <MetricCard
+          icon={<FileText className="size-3.5" />}
+          label="Pages"
+          value={stats.pages}
+          meta={`~${stats.estimatedMinutes} min`}
+        />
+        <MetricCard
+          icon={<MessageSquare className="size-3.5" />}
+          label="Words"
+          value={stats.words.toLocaleString()}
+          meta={`${stats.dialogueWords.toLocaleString()} dialogue`}
+        />
+        <MetricCard
+          icon={<Clapperboard className="size-3.5" />}
+          label="Scenes"
+          value={stats.scenes}
+          meta={`${stats.characters} characters`}
+        />
+        <MetricCard
+          icon={<Clock className="size-3.5" />}
+          label="Reading Time"
+          value={`${Math.ceil(stats.words / 250)}m`}
+          meta={`${avgWordsPerPage} words/page`}
+        />
       </motion.div>
 
-      {/* Donut Chart — Dialogue vs Action */}
       <motion.div variants={fadeUp}>
         <Card className="p-0">
           <CardContent className="px-4 py-4">
@@ -200,13 +183,7 @@ export function OverviewTab({ stats, pacingData }: OverviewTabProps) {
         </Card>
       </motion.div>
 
-      {/* Secondary Grid */}
-      <motion.div variants={fadeUp} className="grid grid-cols-3 gap-3">
-        <MiniStat
-          icon={<Clapperboard className="size-3.5" />}
-          label="Scenes"
-          value={stats.scenes}
-        />
+      <motion.div variants={fadeUp} className="grid grid-cols-4 gap-3">
         <MiniStat
           icon={<Users className="size-3.5" />}
           label="Characters"
@@ -227,14 +204,8 @@ export function OverviewTab({ stats, pacingData }: OverviewTabProps) {
           label="Densest Page"
           value={longestScene ? `p.${longestScene.page}` : "—"}
         />
-        <MiniStat
-          icon={<Timer className="size-3.5" />}
-          label="Reading Time"
-          value={`${Math.ceil(stats.words / 250)}m`}
-        />
       </motion.div>
 
-      {/* Health Score */}
       {health && (
         <motion.div variants={fadeUp}>
           <Separator className="my-1" />
@@ -297,6 +268,31 @@ function MiniStat({
           <span className="text-[10px]">{label}</span>
         </div>
         <p className="text-base font-semibold">{value}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function MetricCard({
+  icon,
+  label,
+  value,
+  meta,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string | number
+  meta: string
+}) {
+  return (
+    <Card className="p-0">
+      <CardContent className="px-3 py-2.5">
+        <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
+          {icon}
+          <span className="text-[10px] font-medium uppercase">{label}</span>
+        </div>
+        <p className="text-xl font-semibold leading-none">{value}</p>
+        <p className="mt-1 text-[10px] text-muted-foreground">{meta}</p>
       </CardContent>
     </Card>
   )

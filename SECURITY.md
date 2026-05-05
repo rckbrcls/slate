@@ -1,6 +1,6 @@
 # Security Policy
 
-Slate is a local-first desktop screenplay editor. Its primary security concerns are local file access, native IPC boundaries, user-owned screenplay data, exported documents, Git execution, and future AI integration boundaries.
+Slate is a local-first desktop screenplay editor. Its primary security concerns are local file access, native IPC boundaries, user-owned screenplay data, exported documents, and Git execution.
 
 ## Reporting A Vulnerability
 
@@ -27,7 +27,7 @@ Slate does not currently include:
 - Backend services.
 - Database credentials.
 - Remote analytics.
-- Remote AI calls.
+- Remote third-party data services.
 - Cloud file synchronization.
 
 The app runs as an Electron desktop application. The renderer owns product workflow, while the Electron main process owns native file dialogs, filesystem access, project metadata persistence, file watching, Git execution, and window security defaults.
@@ -103,25 +103,6 @@ Relevant files:
 - `src/hooks/useGit.ts`
 
 The renderer can only call high-level Git methods on `window.slate.git`; it cannot pass arbitrary shell commands. Do not add additional spawned commands without a dedicated security review.
-
-## Clipboard Use
-
-`src/components/AISidePanel.tsx` copies prompt suggestions to the clipboard through `navigator.clipboard.writeText`.
-
-The current implementation copies static prompt text only. It does not copy screenplay contents automatically.
-
-If future features copy selected screenplay text or generated prompts containing user content, make that action explicit in the UI.
-
-## AI And External Services
-
-The current AI side panel does not call OpenAI, Anthropic, Claude Code, or any hosted service. It provides prompt suggestions that the user can copy manually.
-
-Future AI-assisted editing should preserve these boundaries unless product direction changes:
-
-- Never upload screenplay files without explicit user action and clear disclosure.
-- Keep review/accept/reject flows visible to the user.
-- Do not execute local commands or modify files through an AI workflow without explicit approval.
-- Clearly distinguish copied prompts from automated integrations.
 
 ## Exports
 

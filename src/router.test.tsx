@@ -190,7 +190,63 @@ vi.mock("@/extensions/PageNumbers", () => ({
 }))
 
 vi.mock("@/components/Toolbar", () => ({
-  Toolbar: ({ fileName }: { fileName: string }) => <div>{`Toolbar: ${fileName}`}</div>,
+  Toolbar: ({
+    fileName,
+    onToggleFileExplorer,
+    showFileExplorer,
+    onOpenStats,
+    showStats,
+    paperZoom,
+    onZoomIn,
+    onZoomOut,
+    onResetZoom,
+  }: {
+    fileName: string
+    onToggleFileExplorer?: () => void
+    showFileExplorer?: boolean
+    onOpenStats?: () => void
+    showStats?: boolean
+    paperZoom?: number
+    onZoomIn?: () => void
+    onZoomOut?: () => void
+    onResetZoom?: () => void
+  }) => (
+    <div>
+      <div>{`Toolbar: ${fileName}`}</div>
+      {onToggleFileExplorer && (
+        <button type="button" onClick={onToggleFileExplorer}>
+          Toggle Sidebar
+        </button>
+      )}
+      <span data-testid="toolbar-sidebar-state">
+        {showFileExplorer ? "expanded" : "collapsed"}
+      </span>
+      {typeof paperZoom === "number" && onZoomIn && onZoomOut && onResetZoom && (
+        <>
+          <button type="button" onClick={onZoomOut}>
+            Zoom Out
+          </button>
+          <button type="button" onClick={onResetZoom}>
+            Reset Zoom
+          </button>
+          <button type="button" onClick={onZoomIn}>
+            Zoom In
+          </button>
+          <span data-testid="toolbar-zoom-state">
+            {`${Math.round(paperZoom * 100)}%`}
+          </span>
+        </>
+      )}
+      {onOpenStats && (
+        <button type="button" onClick={onOpenStats}>
+          Statistics
+        </button>
+      )}
+      <span data-testid="toolbar-statistics-state">
+        {showStats ? "active" : "inactive"}
+      </span>
+    </div>
+  ),
 }))
 
 vi.mock("@/components/Editor", async () => {
@@ -264,29 +320,29 @@ vi.mock("@/components/TitlePageView", () => ({
   TitlePageView: () => null,
 }))
 
-vi.mock("@/components/AISidePanel", () => ({
-  AISidePanel: () => null,
-}))
-
 vi.mock("@/components/StatsSidePanel", () => ({
-  StatsSidePanel: () => null,
+  StatsSidePanel: () => <div>Statistics Panel</div>,
 }))
 
 vi.mock("@/components/FileExplorer", () => ({
-  FileExplorer: ({ onOpenFile }: { onOpenFile: (path: string) => void }) => (
-    <button type="button" onClick={() => void onOpenFile(mocks.clickedPath)}>
-      Open Script from Tree
-    </button>
+  FileExplorer: ({
+    onOpenFile,
+    headerAction,
+  }: {
+    onOpenFile: (path: string) => void
+    headerAction?: ReactNode
+  }) => (
+    <div>
+      {headerAction}
+      <button type="button" onClick={() => void onOpenFile(mocks.clickedPath)}>
+        Open Script from Tree
+      </button>
+    </div>
   ),
 }))
 
 vi.mock("@/components/GitHistory", () => ({
   GitHistory: () => null,
-}))
-
-vi.mock("@/components/ui/expandable-screen", () => ({
-  ExpandableScreen: ({ children }: { children: ReactNode }) => <>{children}</>,
-  ExpandableScreenContent: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
 vi.mock("@/components/WelcomeScreen", () => ({
@@ -304,12 +360,25 @@ vi.mock("sonner", () => ({
 describe("router hydration", () => {
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
   })
 
   beforeEach(() => {
+    class ResizeObserverMock {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+
+    vi.stubGlobal("ResizeObserver", ResizeObserverMock)
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
     vi.resetModules()
     window.location.hash = "#/"
     window.sessionStorage.clear()
+    window.localStorage.clear()
     mocks.clearError.mockReset()
     mocks.markDirty.mockReset()
     mocks.openFile.mockReset()
@@ -391,5 +460,209 @@ describe("router hydration", () => {
     expect(screen.getByText("Toolbar: script.fountain")).not.toBeNull()
     expect(screen.getByText(new RegExp(mocks.clickedText))).not.toBeNull()
     expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(4)
+  })
+
+  it("collapses and reopens the file explorer without breaking tree file opens", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    const sidebarPanel = screen.getByTestId("file-explorer-panel")
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("open")
+    expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("expanded")
+    const resizeHandle = screen.getByRole("separator", { name: "Resize File Explorer" })
+    expect(resizeHandle.className).toContain("bg-transparent")
+    expect(resizeHandle.childElementCount).toBe(0)
+
+    fireEvent.click(screen.getByRole("button", { name: "Close Sidebar" }))
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("closed")
+    expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("collapsed")
+    expect(screen.queryByRole("separator", { name: "Resize File Explorer" })).toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "Toggle Sidebar" }))
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("open")
+    expect(screen.getByTestId("toolbar-sidebar-state").textContent).toBe("expanded")
+    expect(screen.getByRole("separator", { name: "Resize File Explorer" })).not.toBeNull()
+
+    fireEvent.click(screen.getByRole("button", { name: "Open Script from Tree" }))
+
+    await waitFor(() => {
+      expect(mocks.openFilePath).toHaveBeenCalledWith(mocks.clickedPath)
+    })
+
+    expect(screen.getByText("Toolbar: script.fountain")).not.toBeNull()
+    expect(screen.getByText(new RegExp(mocks.clickedText))).not.toBeNull()
+  })
+
+  it("shows statistics as an exclusive editor view", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    const { container } = render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    expect(container.querySelector("#editor-file-explorer-layout")).not.toBeNull()
+    expect(screen.queryByText("Statistics Panel")).toBeNull()
+    expect(screen.getByTestId("toolbar-statistics-state").textContent).toBe("inactive")
+
+    fireEvent.click(screen.getByRole("button", { name: "Statistics" }))
+
+    expect(screen.getByText("Statistics Panel")).not.toBeNull()
+    expect(container.querySelector("#editor-file-explorer-layout")).toBeNull()
+    expect(screen.queryByText(new RegExp(mocks.restoredText))).toBeNull()
+    expect(screen.getByTestId("toolbar-statistics-state").textContent).toBe("active")
+  })
+
+  it("restores the persisted file explorer width on editor load", async () => {
+    window.location.hash = "#/editor"
+    window.localStorage.setItem("slate.editor.fileExplorerWidth.v1", "360")
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    const sidebarPanel = screen.getByTestId("file-explorer-panel")
+
+    expect(sidebarPanel.getAttribute("data-state")).toBe("open")
+    expect(sidebarPanel.getAttribute("data-sidebar-default-width")).toBe("360")
+    expect(screen.getByRole("separator", { name: "Resize File Explorer" })).not.toBeNull()
+  })
+
+  it("controls paper zoom from the toolbar without changing pagination", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    const { container } = render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("100%")
+    expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom In" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("110%")
+    })
+
+    expect(window.localStorage.getItem("slate.editor.paperZoom.v1")).toBe("1.1")
+    expect(container.querySelector(".screenplay-zoom-frame")?.getAttribute("data-paper-zoom")).toBe("1.1")
+    expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(2)
+
+    fireEvent.click(screen.getByRole("button", { name: "Reset Zoom" }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("100%")
+    })
+  })
+
+  it("zooms paper with shifted wheel and pinch-like wheel while normal wheel keeps scrolling", async () => {
+    window.location.hash = "#/editor"
+    window.sessionStorage.setItem("slate-editor-session", JSON.stringify({
+      activeProjectDir: "/tmp/project",
+      filePath: mocks.restoredPath,
+    }))
+
+    const { createAppRouter } = await import("@/router")
+    const router = createAppRouter()
+
+    const { container } = render(<RouterProvider router={router} />)
+
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(mocks.restoredText))).not.toBeNull()
+    })
+
+    const scrollContainer = screen.getByTestId("editor-paper-scroll-container")
+    Object.defineProperty(scrollContainer, "getBoundingClientRect", {
+      value: () => ({
+        x: 0,
+        y: 0,
+        width: 800,
+        height: 600,
+        top: 0,
+        right: 800,
+        bottom: 600,
+        left: 0,
+        toJSON: () => ({}),
+      }),
+    })
+    scrollContainer.scrollLeft = 40
+    scrollContainer.scrollTop = 80
+
+    fireEvent.wheel(scrollContainer, {
+      deltaY: -100,
+      shiftKey: true,
+      clientX: 100,
+      clientY: 120,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("111%")
+    })
+
+    expect(scrollContainer.scrollLeft).toBeGreaterThan(40)
+    expect(scrollContainer.scrollTop).toBeGreaterThan(80)
+    const zoomAfterShiftWheel = screen.getByTestId("toolbar-zoom-state").textContent
+
+    fireEvent.wheel(scrollContainer, {
+      deltaY: -100,
+      clientX: 100,
+      clientY: 120,
+    })
+
+    expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe(zoomAfterShiftWheel)
+
+    fireEvent.wheel(scrollContainer, {
+      deltaY: 100,
+      ctrlKey: true,
+      clientX: 100,
+      clientY: 120,
+    })
+
+    await waitFor(() => {
+      expect(screen.getByTestId("toolbar-zoom-state").textContent).toBe("100%")
+    })
+
+    expect(container.querySelectorAll(".screenplay-page-surface")).toHaveLength(2)
   })
 })

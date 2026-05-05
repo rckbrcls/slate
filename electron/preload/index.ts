@@ -37,6 +37,21 @@ const slateApi: SlateApi = {
   readDirectory: (path: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.fileReadDirectory, path) as Promise<SlateFileEntry[]>,
 
+  renamePath: (path: string, nextName: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.fileRenamePath, { path, nextName }) as Promise<string>,
+
+  duplicateFile: (path: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.fileDuplicate, path) as Promise<string>,
+
+  movePathToTrash: (path: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.fileMoveToTrash, path) as Promise<void>,
+
+  revealPath: (path: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.fileReveal, path) as Promise<void>,
+
+  copyPathToClipboard: (path: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.fileCopyPathToClipboard, path) as Promise<void>,
+
   statFile: (path: string) =>
     ipcRenderer.invoke(IPC_CHANNELS.fileStat, path) as Promise<SlateFileStat | null>,
 

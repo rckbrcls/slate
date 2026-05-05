@@ -1,8 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain, shell, session } from "electron"
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell, session } from "electron"
 import { execFile } from "node:child_process"
 import { watch, type FSWatcher } from "node:fs"
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
-import { dirname, join } from "node:path"
+import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises"
+import { basename, dirname, extname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { IPC_CHANNELS } from "../shared/ipc"
@@ -27,6 +27,11 @@ interface FileWritePayload {
 interface BinaryWritePayload {
   path: string
   content: Uint8Array | number[]
+}
+
+interface FileRenamePayload {
+  path: string
+  nextName: string
 }
 
 interface WatchStartPayload {
@@ -84,6 +89,48 @@ function assertStringArray(value: unknown, field: string): string[] | undefined 
   return value
 }
 
+function assertFileName(value: unknown, field: string): string {
+  const name = assertString(value, field).trim()
+
+  if (
+    name.length === 0 ||
+    name.includes("/") ||
+    name.includes("\\") ||
+    basename(name) !== name
+  ) {
+    throw new Error(`Invalid ${field}`)
+  }
+
+  return name
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await stat(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function getDuplicateFilePath(filePath: string): Promise<string> {
+  const parentDir = dirname(filePath)
+  const fileName = basename(filePath)
+  const extension = extname(fileName)
+  const stem = extension ? fileName.slice(0, -extension.length) : fileName
+
+  for (let index = 1; index < 1000; index += 1) {
+    const suffix = index === 1 ? " copy" : ` copy ${index}`
+    const candidate = join(parentDir, `${stem}${suffix}${extension}`)
+
+    if (!(await pathExists(candidate))) {
+      return candidate
+    }
+  }
+
+  throw new Error("Could not find an available copy name")
+}
+
 function normalizeFilters(value: unknown): SlateFileFilter[] | undefined {
   if (value === undefined) return undefined
   if (!Array.isArray(value)) {
@@ -133,6 +180,16 @@ async function statFile(filePath: string): Promise<SlateFileStat | null> {
 
 function projectStoreFilePath() {
   return join(app.getPath("userData"), "slate-projects.json")
+}
+
+function rendererAssetPath(fileName: string) {
+  return app.isPackaged
+    ? join(__dirname, "../renderer", fileName)
+    : join(__dirname, "../../public", fileName)
+}
+
+function installApplicationIcon() {
+  app.dock?.setIcon(rendererAssetPath("slate.png"))
 }
 
 function isProjectEntry(value: unknown): value is ProjectEntry {
@@ -290,6 +347,7 @@ function createMainWindow() {
     minWidth: 960,
     minHeight: 640,
     title: "Slate",
+    icon: rendererAssetPath("slate.png"),
     ...macWindowOptions,
     webPreferences: {
       preload: join(__dirname, "../preload/index.cjs"),
@@ -408,6 +466,52 @@ function registerIpcHandlers() {
       isDirectory: entry.isDirectory(),
       isFile: entry.isFile(),
     }))
+  })
+
+  ipcMain.handle(IPC_CHANNELS.fileRenamePath, async (_event, payload: FileRenamePayload) => {
+    const currentPath = assertString(payload.path, "path")
+    const nextName = assertFileName(payload.nextName, "nextName")
+    const nextPath = join(dirname(currentPath), nextName)
+
+    if (nextPath === currentPath) {
+      return currentPath
+    }
+
+    if (await pathExists(nextPath)) {
+      throw new Error("A file or folder with that name already exists")
+    }
+
+    await rename(currentPath, nextPath)
+    return nextPath
+  })
+
+  ipcMain.handle(IPC_CHANNELS.fileDuplicate, async (_event, filePath: unknown) => {
+    const sourcePath = assertString(filePath, "path")
+    const sourceStat = await stat(sourcePath)
+
+    if (!sourceStat.isFile()) {
+      throw new Error("Only files can be duplicated")
+    }
+
+    const targetPath = await getDuplicateFilePath(sourcePath)
+    await copyFile(sourcePath, targetPath)
+    return targetPath
+  })
+
+  ipcMain.handle(IPC_CHANNELS.fileMoveToTrash, async (_event, filePath: unknown) => {
+    const targetPath = assertString(filePath, "path")
+    await stat(targetPath)
+    await shell.trashItem(targetPath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.fileReveal, async (_event, filePath: unknown) => {
+    const targetPath = assertString(filePath, "path")
+    await stat(targetPath)
+    shell.showItemInFolder(targetPath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.fileCopyPathToClipboard, async (_event, filePath: unknown) => {
+    clipboard.writeText(assertString(filePath, "path"))
   })
 
   ipcMain.handle(IPC_CHANNELS.fileStat, async (_event, filePath: unknown) => {
@@ -539,6 +643,7 @@ function registerIpcHandlers() {
 
 app.whenReady().then(() => {
   installSecurityDefaults()
+  installApplicationIcon()
   registerIpcHandlers()
   createMainWindow()
 

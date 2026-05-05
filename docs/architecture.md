@@ -95,11 +95,10 @@ The renderer entrypoint is still `src/main.tsx`. It is bundled by the renderer s
 `src/components/` contains the visible product surfaces:
 
 - `Editor.tsx` mounts the Tiptap editor.
-- `Toolbar.tsx` exposes document, export, title-page, stats, AI, file explorer, scene-numbering, revision, and project-close actions.
+- `Toolbar.tsx` exposes document, export, title-page, stats, file explorer, screenplay element, scene-numbering, revision, and project-close actions.
 - `FileExplorer.tsx` displays the opened project folder.
 - `GitHistory.tsx` displays Git information when the folder is a Git repository.
-- `StatsSidePanel.tsx` and `src/components/stats/*` display analysis tabs.
-- `AISidePanel.tsx` provides copyable prompt suggestions and disk-change guidance.
+- `StatsSidePanel.tsx` and `src/components/stats/*` display the full statistics page and analysis tabs.
 - `ScreenplayPageStack.tsx` and `TitlePageView.tsx` frame screenplay output and title-page data.
 
 `src/components/ui/` contains shadcn-style UI primitives and local component wrappers.
@@ -124,7 +123,6 @@ The renderer entrypoint is still `src/main.tsx`. It is bundled by the renderer s
 - `ScreenplayKeymap`
 - `ScreenplayAutocomplete`
 - `PageNumbers`
-- `AIDiff`
 - `RevisionMark`
 
 This design keeps screenplay structure typed inside ProseMirror instead of relying on plain text heuristics throughout the app.
@@ -191,7 +189,6 @@ Both export paths are invoked from `EditorRoute` and written to disk through `sr
 - No backend process or API server exists.
 - No database, ORM, migration, seed, or persistent schema exists.
 - No authentication or authorization model exists.
-- No external AI service is called by the app.
 - No CI/CD or hosted deployment configuration is committed.
 - No signing, notarization, release channel, or auto-update policy is configured.
 - The Electron IPC bridge should be reviewed and narrowed before broader distribution.

@@ -17,7 +17,6 @@ The app is designed for local writing workflows:
 - Export the current document to PDF or Final Draft XML (`.fdx`).
 - Inspect screenplay statistics, pacing, character usage, readability, beat targets, and character co-occurrence.
 - Surface Git status and history when the opened project folder is a Git repository.
-- Copy prompt suggestions for external Claude Code review without uploading screenplay files from the app.
 
 ## Technology Stack
 
@@ -47,7 +46,6 @@ The app is designed for local writing workflows:
 - **Production tools:** `src/lib/production/sceneNumbers.ts`, `src/lib/production/revisions.ts`, and related Tiptap extensions handle scene numbering and revision marks.
 - **Analytics:** `src/lib/stats.ts` and `src/lib/analytics/*` calculate stats, character metrics, pacing, readability, beat targets, Bechdel criteria, and co-occurrence data.
 - **Git awareness:** `src/hooks/useGit.ts` and `src/lib/git/commands.ts` call high-level `window.slate.git` methods. The main process runs the local `git` binary without exposing a generic shell API.
-- **AI side panel:** `src/components/AISidePanel.tsx` provides copyable prompt suggestions and disk-sync guidance. It does not call a hosted AI API.
 
 ## Project Structure
 
@@ -165,7 +163,6 @@ Start with:
 
 - No backend server, hosted API, authentication, authorization, or database exists in the current codebase.
 - No CI/CD, release automation, signing, notarization, or auto-update workflow is configured.
-- The AI side panel provides prompt suggestions only; it does not execute AI calls or manage Claude Code processes.
 - The Electron IPC bridge intentionally exposes local filesystem and Git features needed by the app; review handlers in `electron/main/index.ts` before distribution.
 
 ## License

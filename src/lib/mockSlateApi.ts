@@ -252,8 +252,118 @@ function writeStoredProjects(storage: Storage | null, projects: ProjectEntry[]) 
   }
 }
 
-function createFileStat(path: string, textFiles: Map<string, string>): SlateFileStat | null {
-  const isDirectory = mockDirectories.has(path)
+function cloneDirectories() {
+  return new Map(
+    [...mockDirectories.entries()].map(([path, entries]) => [
+      path,
+      entries.map((entry) => ({ ...entry })),
+    ]),
+  )
+}
+
+function getMockPathName(path: string) {
+  return path.split("/").pop() || path
+}
+
+function getMockPathDir(path: string) {
+  const index = path.lastIndexOf("/")
+  return index > 0 ? path.substring(0, index) : null
+}
+
+function replaceMockPathPrefix(path: string, oldPath: string, newPath: string) {
+  return path === oldPath ? newPath : path.replace(`${oldPath}/`, `${newPath}/`)
+}
+
+function isMockPathInside(path: string, dirPath: string) {
+  return path === dirPath || path.startsWith(`${dirPath}/`)
+}
+
+function assertMockFileName(value: string) {
+  const name = value.trim()
+
+  if (name.length === 0 || name.includes("/") || name.includes("\\")) {
+    throw new Error("Invalid file name")
+  }
+
+  return name
+}
+
+function hasMockPath(
+  path: string,
+  textFiles: Map<string, string>,
+  directories: Map<string, SlateFileEntry[]>,
+) {
+  return textFiles.has(path) || directories.has(path)
+}
+
+function removeDirectoryEntry(
+  directories: Map<string, SlateFileEntry[]>,
+  path: string,
+) {
+  const parentDir = getMockPathDir(path)
+  if (!parentDir) return
+
+  const entries = directories.get(parentDir)
+  if (!entries) return
+
+  directories.set(parentDir, entries.filter((entry) => entry.path !== path))
+}
+
+function upsertDirectoryEntry(
+  directories: Map<string, SlateFileEntry[]>,
+  path: string,
+  isDirectory: boolean,
+) {
+  const parentDir = getMockPathDir(path)
+  if (!parentDir) return
+
+  const entries = directories.get(parentDir)
+  if (!entries) return
+
+  const entry = createEntry(path, isDirectory)
+  const existingIndex = entries.findIndex((item) => item.path === path)
+
+  if (existingIndex >= 0) {
+    directories.set(parentDir, entries.map((item, index) => (
+      index === existingIndex ? entry : item
+    )))
+    return
+  }
+
+  directories.set(parentDir, [...entries, entry])
+}
+
+function getMockDuplicatePath(
+  path: string,
+  textFiles: Map<string, string>,
+  directories: Map<string, SlateFileEntry[]>,
+) {
+  const parentDir = getMockPathDir(path)
+  if (!parentDir) throw new Error("Invalid file path")
+
+  const fileName = getMockPathName(path)
+  const extensionIndex = fileName.lastIndexOf(".")
+  const stem = extensionIndex > 0 ? fileName.substring(0, extensionIndex) : fileName
+  const extension = extensionIndex > 0 ? fileName.substring(extensionIndex) : ""
+
+  for (let index = 1; index < 1000; index += 1) {
+    const suffix = index === 1 ? " copy" : ` copy ${index}`
+    const candidate = `${parentDir}/${stem}${suffix}${extension}`
+
+    if (!hasMockPath(candidate, textFiles, directories)) {
+      return candidate
+    }
+  }
+
+  throw new Error("Could not find an available copy name")
+}
+
+function createFileStat(
+  path: string,
+  textFiles: Map<string, string>,
+  directories: Map<string, SlateFileEntry[]>,
+): SlateFileStat | null {
+  const isDirectory = directories.has(path)
   const isFile = textFiles.has(path)
 
   if (!isDirectory && !isFile) return null
@@ -273,6 +383,8 @@ export function createMockSlateApi({
 } = {}): SlateApi {
   let projects = cloneProjects(readStoredProjects(storage) ?? defaultProjects)
   const textFiles = new Map(mockTextFiles)
+  const directories = cloneDirectories()
+  let clipboardText = ""
 
   const persistProjects = (nextProjects: ProjectEntry[]) => {
     projects = cloneProjects(nextProjects)
@@ -288,12 +400,118 @@ export function createMockSlateApi({
     readTextFile: async (path) => textFiles.get(path) ?? "",
     writeTextFile: async (path, content) => {
       textFiles.set(path, content)
+      upsertDirectoryEntry(directories, path, false)
     },
     writeBinaryFile: async () => undefined,
     readDirectory: async (path) => (
-      mockDirectories.get(path)?.map((entry) => ({ ...entry })) ?? []
+      directories.get(path)?.map((entry) => ({ ...entry })) ?? []
     ),
-    statFile: async (path) => createFileStat(path, textFiles),
+    renamePath: async (path, nextName) => {
+      const cleanName = assertMockFileName(nextName)
+      const parentDir = getMockPathDir(path)
+      if (!parentDir) throw new Error("Invalid file path")
+
+      const nextPath = `${parentDir}/${cleanName}`
+      if (nextPath === path) return path
+
+      const isFile = textFiles.has(path)
+      const isDirectory = directories.has(path)
+      if (!isFile && !isDirectory) throw new Error("File or folder not found")
+      if (hasMockPath(nextPath, textFiles, directories)) {
+        throw new Error("A file or folder with that name already exists")
+      }
+
+      removeDirectoryEntry(directories, path)
+
+      if (isFile) {
+        const content = textFiles.get(path) ?? ""
+        textFiles.delete(path)
+        textFiles.set(nextPath, content)
+        upsertDirectoryEntry(directories, nextPath, false)
+        return nextPath
+      }
+
+      const nextDirectories = new Map<string, SlateFileEntry[]>()
+      for (const [dirPath, entries] of directories.entries()) {
+        const renamedDirPath = isMockPathInside(dirPath, path)
+          ? replaceMockPathPrefix(dirPath, path, nextPath)
+          : dirPath
+        const renamedEntries = entries.map((entry) => {
+          if (!isMockPathInside(entry.path, path)) return { ...entry }
+
+          const renamedPath = replaceMockPathPrefix(entry.path, path, nextPath)
+          return {
+            ...entry,
+            name: getMockPathName(renamedPath),
+            path: renamedPath,
+          }
+        })
+        nextDirectories.set(renamedDirPath, renamedEntries)
+      }
+
+      directories.clear()
+      for (const [dirPath, entries] of nextDirectories.entries()) {
+        directories.set(dirPath, entries)
+      }
+
+      for (const [filePath, content] of [...textFiles.entries()]) {
+        if (!isMockPathInside(filePath, path)) continue
+
+        textFiles.delete(filePath)
+        textFiles.set(replaceMockPathPrefix(filePath, path, nextPath), content)
+      }
+
+      upsertDirectoryEntry(directories, nextPath, true)
+      return nextPath
+    },
+    duplicateFile: async (path) => {
+      if (!textFiles.has(path)) {
+        throw new Error("Only files can be duplicated")
+      }
+
+      const copiedPath = getMockDuplicatePath(path, textFiles, directories)
+      textFiles.set(copiedPath, textFiles.get(path) ?? "")
+      upsertDirectoryEntry(directories, copiedPath, false)
+      return copiedPath
+    },
+    movePathToTrash: async (path) => {
+      const isFile = textFiles.has(path)
+      const isDirectory = directories.has(path)
+      if (!isFile && !isDirectory) throw new Error("File or folder not found")
+
+      removeDirectoryEntry(directories, path)
+
+      if (isFile) {
+        textFiles.delete(path)
+        return
+      }
+
+      for (const dirPath of [...directories.keys()]) {
+        if (isMockPathInside(dirPath, path)) {
+          directories.delete(dirPath)
+        }
+      }
+
+      for (const filePath of [...textFiles.keys()]) {
+        if (isMockPathInside(filePath, path)) {
+          textFiles.delete(filePath)
+        }
+      }
+    },
+    revealPath: async (path) => {
+      if (!hasMockPath(path, textFiles, directories)) {
+        throw new Error("File or folder not found")
+      }
+    },
+    copyPathToClipboard: async (path) => {
+      if (!hasMockPath(path, textFiles, directories)) {
+        throw new Error("File or folder not found")
+      }
+
+      clipboardText = path
+      void clipboardText
+    },
+    statFile: async (path) => createFileStat(path, textFiles, directories),
     watchFile: () => () => undefined,
     projects: {
       read: async () => cloneProjects(projects),

@@ -59,6 +59,11 @@ export interface SlateApi {
   writeTextFile: (path: string, content: string) => Promise<void>
   writeBinaryFile: (path: string, content: Uint8Array) => Promise<void>
   readDirectory: (path: string) => Promise<SlateFileEntry[]>
+  renamePath: (path: string, nextName: string) => Promise<string>
+  duplicateFile: (path: string) => Promise<string>
+  movePathToTrash: (path: string) => Promise<void>
+  revealPath: (path: string) => Promise<void>
+  copyPathToClipboard: (path: string) => Promise<void>
   statFile: (path: string) => Promise<SlateFileStat | null>
   watchFile: (
     path: string,

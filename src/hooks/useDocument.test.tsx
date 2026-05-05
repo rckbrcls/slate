@@ -167,4 +167,43 @@ describe("useDocument external sync", () => {
     expect(setContent).toHaveBeenCalledTimes(1)
     expect(getLatestDocument(latest).externalChangePending).toBe(true)
   })
+
+  it("updates the open file path without clearing dirty state", async () => {
+    const setContent = vi.fn()
+    const editorRef = {
+      current: {
+        state: { doc: {} },
+        commands: { setContent },
+      },
+    }
+
+    let latest: ReturnType<typeof useDocument> | null = null
+
+    render(
+      <HookHarness
+        editorRef={editorRef}
+        onChange={(value) => {
+          latest = value
+        }}
+      />,
+    )
+
+    mocks.readFountainFile.mockResolvedValueOnce("initial draft")
+
+    await act(async () => {
+      await latest?.openFilePath("/tmp/script.fountain")
+    })
+
+    act(() => {
+      latest?.markDirty()
+    })
+
+    act(() => {
+      latest?.updateFilePath("/tmp/renamed.fountain")
+    })
+
+    expect(getLatestDocument(latest).filePath).toBe("/tmp/renamed.fountain")
+    expect(getLatestDocument(latest).fileName).toBe("renamed.fountain")
+    expect(getLatestDocument(latest).isDirty).toBe(true)
+  })
 })
