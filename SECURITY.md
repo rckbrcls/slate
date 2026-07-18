@@ -75,6 +75,11 @@ The current prototype allows the renderer to ask the main process to read and wr
 
 Recent project metadata is stored locally in `slate-projects.json` under Electron's `userData` directory.
 
+Document-intelligence projects are portable local directories. The renderer can invoke
+only high-level project, version, analysis, comparison, progress, and cancellation
+operations. Electron owns the Python sidecar process and exchanges JSON-RPC over
+`stdin/stdout`; no local network port or raw subprocess API is exposed to the renderer.
+
 Relevant files:
 
 - `src/hooks/useProjectStore.ts`

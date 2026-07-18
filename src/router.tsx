@@ -11,6 +11,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { Toaster } from "@/components/ui/sonner"
 import { WelcomeRoute } from "@/routes/WelcomeRoute"
 import { EditorRoute } from "@/routes/EditorRoute"
+import { ProjectRoute } from "@/routes/ProjectRoute"
 
 function RootLayout() {
   return (
@@ -40,7 +41,13 @@ const editorRoute = createRoute({
   component: EditorRoute,
 })
 
-const routeTree = rootRoute.addChildren([welcomeRoute, editorRoute])
+const projectRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "project",
+  component: ProjectRoute,
+})
+
+const routeTree = rootRoute.addChildren([welcomeRoute, projectRoute, editorRoute])
 
 export function createAppRouter({
   history = createHashHistory(),

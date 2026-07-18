@@ -1,20 +1,22 @@
 # Getting Started
 
-This guide covers the local development workflow for Slate. Slate is an Electron desktop app with a React/Vite renderer.
+This guide covers the local development workflow for Slate. Slate is an Electron desktop app with a React/Vite renderer and a Python analysis sidecar.
 
 ## Prerequisites
 
 - Node.js compatible with the installed frontend and Electron toolchain.
 - pnpm.
+- Python 3.11 or newer and `uv` for the local analysis engine.
 - A local `git` binary if you want Git status/history inside opened project folders.
 
 ## Installation
 
 ```bash
 pnpm install
+uv sync --project engine --group dev
 ```
 
-This installs Electron, electron-vite, electron-builder, the renderer dependencies, TypeScript tooling, Vitest, Tailwind, Tiptap, and other JavaScript packages declared in `package.json`.
+These commands install the Electron/renderer toolchain and the Python normalization, persistence, analysis, migration, test, and packaging dependencies.
 
 The project does not require local environment variables by default. `.env.example` is intentionally empty apart from that note.
 
@@ -51,6 +53,12 @@ pnpm test
 
 Tests run through Vitest. Some React tests opt into jsdom with file-level comments.
 
+Run the engine tests separately:
+
+```bash
+uv run --project engine --group dev pytest
+```
+
 ## Type Checking
 
 ```bash
@@ -85,17 +93,19 @@ Signing, notarization, auto-update, release channels, and CI/CD are not configur
 
 ## Useful Files To Read First
 
-1. `src/routes/EditorRoute.tsx` for the main editor workspace flow.
-2. `src/hooks/useDocument.ts` for document lifecycle, autosave, and external disk changes.
-3. `src/lib/fileService.ts` for renderer access to the Electron file bridge.
-4. `electron/main/index.ts` for native dialogs, filesystem handlers, project storage, Git, and security defaults.
-5. `electron/preload/index.ts` for the `window.slate` API.
-6. `src/extensions/index.ts` for the active Tiptap screenplay schema.
-7. `src/lib/export/pdf.ts` and `src/lib/export/fdx.ts` for export behavior.
+1. `docs/product-strategy.md` for the product contract and scope.
+2. `src/routes/ProjectRoute.tsx` for the primary analysis workspace.
+3. `engine/src/slate_engine/service.py` for project, version, analysis, and comparison behavior.
+4. `electron/main/engineClient.ts` for the sidecar lifecycle and JSON-RPC boundary.
+5. `electron/main/index.ts` and `electron/preload/index.ts` for validated IPC.
+6. `schemas/slate-document.schema.json` for the normalized document contract.
+7. `src/routes/EditorRoute.tsx` for the legacy screenplay workspace retained during migration.
 
 ## Local Data Notes
 
 - Screenplay content remains in user-selected local files.
 - Recent project metadata is stored as `slate-projects.json` under Electron's `userData` directory.
+- Each intelligence project stores `project.sqlite`, immutable source objects, and normalized JSON in its user-selected directory.
+- The selected intelligence project uses browser `sessionStorage` key `slate-intelligence-session-v1`.
 - Current route/session restoration uses browser `sessionStorage` key `slate-editor-session`.
 - Git state is read on demand and is not persisted by Slate.

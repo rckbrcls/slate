@@ -15,7 +15,10 @@ describe("desktop package contract", () => {
     expect(packageJson.main).toBe("out/main/index.js")
     expect(packageJson.scripts?.dev).toBe("electron-vite dev")
     expect(packageJson.scripts?.build).toBe("tsc --noEmit && electron-vite build")
-    expect(packageJson.scripts?.dist).toBe("pnpm build && electron-builder")
+    expect(packageJson.scripts?.["engine:package"]).toContain("engine/package_sidecar.py")
+    expect(packageJson.scripts?.dist).toBe(
+      "pnpm build && pnpm engine:package && electron-builder",
+    )
   })
 
   it("keeps Electron tooling installed", () => {

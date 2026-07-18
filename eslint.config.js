@@ -5,6 +5,6 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["dist/", "out/", "release/"],
+    ignores: ["dist/", "out/", "release/", "engine/.venv/", "engine/build/", "engine/dist/"],
   },
 )

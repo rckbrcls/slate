@@ -5,6 +5,10 @@ out
 release
 dist-ssr
 *.local
+.venv
+__pycache__
+.pytest_cache
+.ruff_cache
 count.txt
 .env
 todos.json

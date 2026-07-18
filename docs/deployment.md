@@ -1,5 +1,10 @@
 # Deployment
 
+> Slate is transitioning to a Python analysis sidecar. Distribution commands now
+> package `engine/src/slate_engine` as `engine/dist/slate-engine` before invoking
+> electron-builder. This document otherwise continues to describe the current
+> Electron packaging state.
+
 The only deployment-like workflow present in the repository is Electron desktop packaging.
 
 Slate does not currently include:
@@ -76,7 +81,7 @@ Before distributing public builds, decide and implement:
 
 ## Local Data During Packaged Runs
 
-Slate stores recent project metadata as `slate-projects.json` under Electron's `userData` directory. Screenplay files and exported artifacts remain in user-selected local paths.
+Slate stores recent project metadata as `slate-projects.json` under Electron's `userData` directory. Intelligence projects remain in user-selected portable directories with `project.sqlite`, immutable objects, normalized JSON, and artifacts. Legacy screenplay files and exported artifacts remain in user-selected local paths.
 
 ## Environment
 

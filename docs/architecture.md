@@ -1,12 +1,13 @@
 # Architecture
 
-Slate is a medium-complexity single desktop application. It has one React/Vite renderer and one Electron native shell. There is no backend server, database, authentication service, hosted API, or monorepo package boundary in the current repository.
+Slate is a local-first desktop application with a React/Vite renderer, an Electron native shell, and a Python document-analysis sidecar. The primary product workflow uses a portable SQLite project database. The previous screenplay editor remains as an internal legacy route during migration.
 
 The main architectural responsibility split is:
 
-- The renderer owns product behavior: screenplay editing, routing, panels, file workflow orchestration, Fountain parsing, pagination, exports, analytics, and UI state.
-- The Electron main process owns native capabilities: desktop windowing, file dialogs, filesystem access, file watching, local project metadata persistence, Git execution, IPC handlers, and bundle configuration.
+- The renderer owns product behavior: project navigation, version timelines, analysis views, normalized/PDF document presentation, comparison, and UI state. It also retains the legacy screenplay editor modules.
+- The Electron main process owns native capabilities: desktop windowing, file dialogs, sidecar lifecycle, filesystem access, file watching, local recent-project metadata, Git execution for the legacy route, IPC handlers, and bundle configuration.
 - The preload script exposes a narrow typed `window.slate` API. The renderer does not receive Node.js APIs.
+- The Python sidecar owns project persistence, immutable imports, normalization, deterministic analysis, annotations, and comparisons.
 
 ## Runtime Overview
 
@@ -19,6 +20,9 @@ flowchart LR
   Main["Electron main process"]
   Disk["Local screenplay files"]
   Store["slate-projects.json"]
+  Sidecar["Python analysis sidecar"]
+  ProjectDb["project.sqlite"]
+  Vault["Immutable object vault"]
   Git["Local git binary"]
   Exports["PDF / FDX exports"]
 
@@ -28,6 +32,9 @@ flowchart LR
   Preload --> Main
   Main --> Disk
   Main --> Store
+  Main --> Sidecar
+  Sidecar --> ProjectDb
+  Sidecar --> Vault
   Main --> Git
   Editor --> Exports
   Exports --> Preload
@@ -40,12 +47,15 @@ flowchart LR
 The router is defined in `src/router.tsx` with TanStack Router hash history.
 
 - `/` renders `WelcomeRoute`.
+- `/project` renders the primary `ProjectRoute` analysis workspace.
 - `/editor` renders `EditorRoute`.
 - Unknown routes navigate back to `/`.
 
-`WelcomeRoute` lets the user open a project folder through `window.slate.openDirectoryDialog`. It stores the selected project in `useProjectStore`, writes an editor-session snapshot, and navigates to `/editor`.
+`WelcomeRoute` creates or opens a portable Slate project through the typed intelligence API, stores its path in the recent-project list, writes an intelligence-session snapshot, and navigates to `/project`.
 
-`EditorRoute` restores the last session from `sessionStorage`, opens the last screenplay file when possible, falls back to `untitled.fountain` or another `.fountain`/`.spmd` file in the project folder, and then mounts the editor workspace.
+`ProjectRoute` loads the immutable version timeline and coordinates `Overview`, `Document`, and `Compare`. It imports supported files through a native dialog and receives progress notifications without direct filesystem or subprocess access.
+
+`EditorRoute` is retained as a legacy internal route. It restores the previous editor session and mounts the screenplay workspace, but it is no longer linked from the primary product surface.
 
 ## Electron Layers
 
@@ -61,8 +71,15 @@ Current handler groups:
 - file stat and file watching
 - recent project metadata read/write
 - Git status, root, log, diff, commit, and checkout-file operations
+- project creation/opening, immutable version import, normalized document retrieval,
+  deterministic analysis, comparison, progress, and cancellation
 
 Git is executed with `execFile("git", args, { cwd })`; no generic shell execution is exposed.
+
+The document engine is started through `EngineClient`. Development uses `uv run`
+against `engine/`; packaged applications use the platform-specific PyInstaller
+binary under Electron resources. JSON-RPC messages travel over `stdin/stdout`, so
+the application opens no local HTTP port.
 
 ### Preload
 
@@ -88,12 +105,15 @@ The renderer entrypoint is still `src/main.tsx`. It is bundled by the renderer s
 
 ### Routes
 
-`src/routes/WelcomeRoute.tsx` and `src/routes/EditorRoute.tsx` are the main product coordinators. They connect hooks, services, editor refs, navigation, exports, stats, file explorer state, Git state, and side panels.
+`src/routes/WelcomeRoute.tsx` and `src/routes/ProjectRoute.tsx` are the primary product coordinators. `EditorRoute.tsx` remains isolated as the legacy screenplay workspace.
 
 ### Components
 
 `src/components/` contains the visible product surfaces:
 
+- `IntelligenceWelcome.tsx` provides the project list and project creation flow.
+- `src/components/intelligence/*` provides metrics, normalized/PDF reading,
+  annotations, and pairwise comparison.
 - `Editor.tsx` mounts the Tiptap editor.
 - `Toolbar.tsx` exposes document, export, title-page, stats, file explorer, screenplay element, scene-numbering, revision, and project-close actions.
 - `FileExplorer.tsx` displays the opened project folder.
@@ -141,15 +161,53 @@ Important renderer state is organized through hooks and services:
 
 ## Data And Persistence
 
-Slate does not use a database. Current persistence is:
+Primary document projects use the following portable layout:
+
+```text
+SlateProject/
+|-- project.sqlite
+|-- objects/<content-hash>.<extension>
+|-- normalized/<version-id>.json
+`-- artifacts/
+```
+
+SQLAlchemy defines the local schema and Alembic applies migrations when a project
+is created or opened. Original sources and normalized versions are immutable.
+
+Current persistence is:
 
 | Data | Storage |
 | --- | --- |
 | Screenplay contents | Local user-selected files through Electron IPC |
 | Recent projects | `slate-projects.json` under Electron `userData` |
+| Document project metadata and results | Portable `project.sqlite` |
+| Immutable imported sources | Portable `objects/` content-addressed vault |
+| Normalized document contracts | Portable `normalized/` JSON files |
 | Current editor session | Browser `sessionStorage` key `slate-editor-session` |
 | Git state | Read on demand from the local `git` binary |
 | Exported PDF/FDX files | User-selected paths through Electron save dialogs |
+
+## Document Intelligence Data Flow
+
+```mermaid
+flowchart TD
+  Import["Import supported document"]
+  Main["Validated Electron IPC"]
+  Engine["Python sidecar"]
+  Normalize["Normalize to SlateDocument"]
+  Vault["Store immutable original and JSON"]
+  Analyze["Run deterministic analysis pack"]
+  Database["Persist metrics, findings, and annotations"]
+  Compare["Compare two compatible versions"]
+
+  Import --> Main
+  Main --> Engine
+  Engine --> Normalize
+  Normalize --> Vault
+  Normalize --> Analyze
+  Analyze --> Database
+  Database --> Compare
+```
 
 ## Screenplay Data Flow
 
@@ -186,9 +244,10 @@ Both export paths are invoked from `EditorRoute` and written to disk through `sr
 
 ## Current Boundaries And Limitations
 
-- No backend process or API server exists.
-- No database, ORM, migration, seed, or persistent schema exists.
+- The Python process is local and child-owned; no HTTP API or local port exists.
+- The SQLite schema is per project and supports one logical document timeline.
 - No authentication or authorization model exists.
+- OCR, AI providers, collaboration, and hosted sync are not implemented.
 - No CI/CD or hosted deployment configuration is committed.
 - No signing, notarization, release channel, or auto-update policy is configured.
 - The Electron IPC bridge should be reviewed and narrowed before broader distribution.

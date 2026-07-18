@@ -1,13 +1,14 @@
 # Slate Documentation
 
-This documentation describes the current Slate codebase: a local-first Electron desktop screenplay editor with a React/Vite renderer and custom Tiptap screenplay model.
+Slate is transitioning from a screenplay editor into a local-first application for versioned document analysis. [Product Strategy](product-strategy.md) is the source of truth for the approved product direction. The remaining guides describe the implemented screenplay-editor codebase until that migration is complete.
 
-Slate does not currently include a backend server, hosted API, database, authentication system, or CI/CD pipeline. The useful documentation focuses on the editor architecture, local file workflow, file formats, Electron packaging, security boundaries, and development conventions.
+Slate includes a local Python analysis sidecar and a per-project SQLite database. It does not include a hosted API, authentication system, or CI/CD pipeline. The documentation covers both the primary document-intelligence workflow and the legacy editor code retained during migration.
 
 ## Guides
 
 | Guide | Purpose |
 | --- | --- |
+| [Product Strategy](product-strategy.md) | Approved product pivot, MVP scope, target architecture, and delivery sequence. |
 | [Getting Started](getting-started.md) | Prerequisites, installation, environment configuration, and available scripts. |
 | [Architecture](architecture.md) | Renderer/native-shell responsibilities, data flow, persistence, and current boundaries. |
 | [File Formats](file-formats.md) | Fountain import/export, Tiptap document nodes, PDF output, and FDX XML export. |
@@ -22,7 +23,7 @@ Security considerations live in the root [`SECURITY.md`](../SECURITY.md).
 These files intentionally avoid documenting nonexistent systems:
 
 - There is no `docs/api.md` because the current app has no HTTP endpoints, server routes, SDK, or external API contract.
-- There is no `docs/database.md` because the current app has no database, ORM, migration, or seed workflow.
+- There is no separate `docs/database.md`; the portable project schema and migration boundary are documented in [Architecture](architecture.md) and [Product Strategy](product-strategy.md).
 - There is no separate `docs/setup.md` because setup is simple enough for the root README and [Getting Started](getting-started.md).
 - There is no `docs/security.md` because the root `SECURITY.md` is the security policy and risk document.
 - There is no `CONTRIBUTING.md` because the repository does not currently define a public contribution workflow.

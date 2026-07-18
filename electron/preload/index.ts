@@ -3,6 +3,7 @@ import { IPC_CHANNELS } from "../shared/ipc"
 import type {
   GitFileStatus,
   GitLogEntry,
+  AnalysisProgress,
   ProjectEntry,
   SlateApi,
   SlateFileEntry,
@@ -79,6 +80,54 @@ const slateApi: SlateApi = {
       ipcRenderer.invoke(IPC_CHANNELS.projectsRead) as Promise<ProjectEntry[]>,
     write: (projects: ProjectEntry[]) =>
       ipcRenderer.invoke(IPC_CHANNELS.projectsWrite, projects) as Promise<void>,
+  },
+
+  intelligence: {
+    createProject: (input) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceCreateProject, input),
+    openProject: (path) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceOpenProject, path),
+    setAnalysisPack: (projectPath, analysisPack) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceSetAnalysisPack, {
+        projectPath,
+        analysisPack,
+      }),
+    importVersion: (input) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceImportVersion, input),
+    listVersions: (projectPath) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceListVersions, projectPath),
+    getDocument: (projectPath, versionId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceGetDocument, {
+        projectPath,
+        versionId,
+      }),
+    getDocumentAsset: (projectPath, versionId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceGetDocumentAsset, {
+        projectPath,
+        versionId,
+      }),
+    getAnalysis: (projectPath, versionId, analysisPack) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceGetAnalysis, {
+        projectPath,
+        versionId,
+        analysisPack,
+      }),
+    compareVersions: (projectPath, baseVersionId, targetVersionId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intelligenceCompareVersions, {
+        projectPath,
+        baseVersionId,
+        targetVersionId,
+      }),
+    cancel: (requestId) => {
+      ipcRenderer.send(IPC_CHANNELS.intelligenceCancel, requestId)
+    },
+    onProgress: (callback: (progress: AnalysisProgress) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: AnalysisProgress) => {
+        callback(progress)
+      }
+      ipcRenderer.on(IPC_CHANNELS.intelligenceProgress, listener)
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.intelligenceProgress, listener)
+    },
   },
 
   git: {

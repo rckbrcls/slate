@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://rckbrcls.dev/slate/schemas/slate-document-v1.json",
+  "title": "SlateDocument",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "parserVersion", "metadata", "text", "pages", "sections", "elements", "provenance"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "parserVersion": { "type": "string", "minLength": 1 },
+    "metadata": { "$ref": "#/$defs/metadata" },
+    "text": { "type": "string" },
+    "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } },
+    "sections": { "type": "array", "items": { "$ref": "#/$defs/section" } },
+    "elements": { "type": "array", "items": { "$ref": "#/$defs/element" } },
+    "provenance": { "type": "array", "items": { "$ref": "#/$defs/provenance" } }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceName", "sourceFormat", "contentHash"],
+      "properties": {
+        "sourceName": { "type": "string" },
+        "sourceFormat": { "type": "string" },
+        "contentHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "title": { "type": ["string", "null"] },
+        "author": { "type": ["string", "null"] }
+      }
+    },
+    "boundingBox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "top", "right", "bottom"],
+      "properties": {
+        "left": { "type": "number" },
+        "top": { "type": "number" },
+        "right": { "type": "number" },
+        "bottom": { "type": "number" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["number"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "width": { "type": ["number", "null"] },
+        "height": { "type": ["number", "null"] }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "level", "elementIds"],
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "level": { "type": "integer", "minimum": 1 },
+        "elementIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "element": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "text", "charStart", "charEnd", "page", "boundingBox"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "text": { "type": "string" },
+        "charStart": { "type": "integer", "minimum": 0 },
+        "charEnd": { "type": "integer", "minimum": 0 },
+        "page": { "type": ["integer", "null"], "minimum": 1 },
+        "boundingBox": { "oneOf": [{ "$ref": "#/$defs/boundingBox" }, { "type": "null" }] }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["elementId", "source", "page", "boundingBox"],
+      "properties": {
+        "elementId": { "type": "string" },
+        "source": { "type": "string" },
+        "page": { "type": ["integer", "null"], "minimum": 1 },
+        "boundingBox": { "oneOf": [{ "$ref": "#/$defs/boundingBox" }, { "type": "null" }] }
+      }
+    }
+  }
+}

@@ -6,6 +6,7 @@ import { basename, dirname, extname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { IPC_CHANNELS } from "../shared/ipc"
+import { EngineClient } from "./engineClient"
 import type {
   GitFileStatus,
   GitLogEntry,
@@ -73,12 +74,20 @@ interface ExecFailure extends Error {
 }
 
 const fileWatchers = new Map<number, FSWatcher>()
+const engineClient = new EngineClient()
 
 function assertString(value: unknown, field: string): string {
   if (typeof value !== "string" || value.length === 0) {
     throw new Error(`Invalid ${field}`)
   }
   return value
+}
+
+function assertRecord(value: unknown, field: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid ${field}`)
+  }
+  return value as Record<string, unknown>
 }
 
 function assertStringArray(value: unknown, field: string): string[] | undefined {
@@ -563,6 +572,94 @@ function registerIpcHandlers() {
     await writeProjects(projects)
   })
 
+  ipcMain.handle(IPC_CHANNELS.intelligenceCreateProject, async (_event, input: unknown) => {
+    const payload = assertRecord(input, "project")
+    return engineClient.request("project.create", {
+      path: assertString(payload.path, "path"),
+      name: assertString(payload.name, "name"),
+      analysisPack: assertString(payload.analysisPack, "analysisPack"),
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceOpenProject, async (_event, path: unknown) => {
+    return engineClient.request("project.open", { path: assertString(path, "path") })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceSetAnalysisPack, async (_event, input: unknown) => {
+    const payload = assertRecord(input, "analysis pack")
+    return engineClient.request("project.setAnalysisPack", {
+      projectPath: assertString(payload.projectPath, "projectPath"),
+      analysisPack: assertString(payload.analysisPack, "analysisPack"),
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceImportVersion, async (event, input: unknown) => {
+    const payload = assertRecord(input, "version")
+    const requestId = assertString(payload.requestId, "requestId")
+    const note = payload.note === undefined ? undefined : assertString(payload.note, "note")
+    return engineClient.request(
+      "version.import",
+      {
+        projectPath: assertString(payload.projectPath, "projectPath"),
+        sourcePath: assertString(payload.sourcePath, "sourcePath"),
+        note,
+      },
+      {
+        requestId,
+        onProgress: (progress) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send(IPC_CHANNELS.intelligenceProgress, progress)
+          }
+        },
+      },
+    )
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceListVersions, async (_event, projectPath: unknown) => {
+    return engineClient.request("version.list", {
+      projectPath: assertString(projectPath, "projectPath"),
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceGetDocument, async (_event, input: unknown) => {
+    const payload = assertRecord(input, "document")
+    return engineClient.request("document.get", {
+      projectPath: assertString(payload.projectPath, "projectPath"),
+      versionId: assertString(payload.versionId, "versionId"),
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceGetDocumentAsset, async (_event, input: unknown) => {
+    const payload = assertRecord(input, "document asset")
+    const assetPath = await engineClient.request<string>("document.getAssetPath", {
+      projectPath: assertString(payload.projectPath, "projectPath"),
+      versionId: assertString(payload.versionId, "versionId"),
+    })
+    return readFile(assetPath)
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceGetAnalysis, async (_event, input: unknown) => {
+    const payload = assertRecord(input, "analysis")
+    return engineClient.request("analysis.get", {
+      projectPath: assertString(payload.projectPath, "projectPath"),
+      versionId: assertString(payload.versionId, "versionId"),
+      analysisPack: assertString(payload.analysisPack, "analysisPack"),
+    })
+  })
+
+  ipcMain.handle(IPC_CHANNELS.intelligenceCompareVersions, async (_event, input: unknown) => {
+    const payload = assertRecord(input, "comparison")
+    return engineClient.request("comparison.create", {
+      projectPath: assertString(payload.projectPath, "projectPath"),
+      baseVersionId: assertString(payload.baseVersionId, "baseVersionId"),
+      targetVersionId: assertString(payload.targetVersionId, "targetVersionId"),
+    })
+  })
+
+  ipcMain.on(IPC_CHANNELS.intelligenceCancel, (_event, requestId: unknown) => {
+    engineClient.cancel(assertString(requestId, "requestId"))
+  })
+
   ipcMain.handle(IPC_CHANNELS.gitIsRepo, async (_event, cwd: unknown) => {
     const result = await runGit(assertString(cwd, "cwd"), [
       "rev-parse",
@@ -658,4 +755,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit()
   }
+})
+
+app.on("before-quit", () => {
+  engineClient.stop()
 })

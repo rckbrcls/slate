@@ -1,0 +1,31 @@
+[project]
+name = "slate-engine"
+version = "0.1.0"
+description = "Local document normalization, analysis, and version comparison for Slate"
+requires-python = ">=3.11"
+dependencies = [
+  "alembic>=1.16,<2",
+  "docling>=2.60,<3",
+  "pydantic>=2.11,<3",
+  "sqlalchemy>=2.0,<3",
+]
+
+[project.scripts]
+slate-engine = "slate_engine.rpc:main"
+
+[dependency-groups]
+dev = [
+  "pyinstaller>=6.16,<7",
+  "pytest>=8.4,<9",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/slate_engine"]

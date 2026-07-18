@@ -27,13 +27,21 @@ describe("Electron IPC contract", () => {
 
   it("keeps invoke channels wired in preload and main", () => {
     const invokeChannelKeys = Object.keys(IPC_CHANNELS).filter(
-      (key) => key !== "fileWatchEvent",
+      (key) => !["fileWatchEvent", "intelligenceCancel", "intelligenceProgress"].includes(key),
     )
 
     for (const key of invokeChannelKeys) {
       expect(preloadSource).toMatch(ipcCallPattern("ipcRenderer\\.invoke", key))
       expect(mainSource).toMatch(ipcCallPattern("ipcMain\\.handle", key))
     }
+  })
+
+  it("keeps intelligence events narrow and wired in both directions", () => {
+    expect(preloadSource).toContain("ipcRenderer.send(IPC_CHANNELS.intelligenceCancel")
+    expect(mainSource).toContain("ipcMain.on(IPC_CHANNELS.intelligenceCancel")
+    expect(preloadSource).toContain("ipcRenderer.on(IPC_CHANNELS.intelligenceProgress")
+    expect(preloadSource).toContain("ipcRenderer.removeListener(IPC_CHANNELS.intelligenceProgress")
+    expect(mainSource).toContain("event.sender.send(IPC_CHANNELS.intelligenceProgress")
   })
 
   it("keeps file watch events wired in both directions", () => {

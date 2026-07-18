@@ -1,4 +1,4 @@
-appId: com.slate.editor
+appId: com.rckbrcls.slate
 productName: Slate
 icon: public/slate.png
 directories:
@@ -6,6 +6,11 @@ directories:
 files:
   - out/**
   - package.json
+extraResources:
+  - from: engine/dist
+    to: engine
+    filter:
+      - "slate-engine*"
 asar: true
 mac:
   icon: build/generated-icons/icon.icns

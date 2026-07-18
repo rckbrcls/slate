@@ -212,4 +212,4 @@ This metadata is used by editor display and statistics. Export behavior should b
 
 - `.spmd` is treated as a screenplay file extension by open/default-file logic, but the current parser path still reads text and uses Fountain conversion.
 - `public/manifest.json` only carries passive Slate app metadata and is unrelated to screenplay file-format support.
-- No database schema or remote document format exists in the current codebase.
+- The primary intelligence workflow persists metadata in `project.sqlite` and normalized content using `schemas/slate-document.schema.json`; no remote document format exists.

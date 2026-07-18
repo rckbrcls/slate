@@ -42,17 +42,17 @@ export function useProjectStore() {
     await getSlateApi().projects.write(updated)
   }, [])
 
-  const addProject = useCallback(async (dirPath: string) => {
+  const addProject = useCallback(async (dirPath: string, projectName?: string) => {
     setProjects((prev) => {
       const existing = prev.find((p) => p.path === dirPath)
       const now = new Date().toISOString()
       let updated: ProjectEntry[]
       if (existing) {
         updated = prev.map((p) =>
-          p.path === dirPath ? { ...p, lastOpenedAt: now } : p,
+          p.path === dirPath ? { ...p, name: projectName ?? p.name, lastOpenedAt: now } : p,
         )
       } else {
-        const name = getPathName(dirPath)
+        const name = projectName ?? getPathName(dirPath)
         updated = [
           ...prev,
           { path: dirPath, name, lastFile: null, lastOpenedAt: now, favorite: false },

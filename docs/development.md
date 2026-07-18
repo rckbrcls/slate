@@ -1,13 +1,17 @@
 # Development
 
-Slate should stay local-first and renderer-domain-first. The Electron layer exists to provide native desktop capabilities, not to own screenplay editing behavior.
+Slate should stay local-first with a narrow renderer/native boundary. Electron owns native capabilities and the sidecar lifecycle; Python owns document normalization, persistence, analysis, and comparison; the renderer owns presentation and interaction.
 
 ## Working Boundaries
 
 | Area | Main files |
 | --- | --- |
 | Electron main/preload | `electron/main/index.ts`, `electron/preload/index.ts`, `electron/shared/*` |
-| Renderer routes | `src/routes/WelcomeRoute.tsx`, `src/routes/EditorRoute.tsx` |
+| Sidecar client | `electron/main/engineClient.ts` |
+| Python engine | `engine/src/slate_engine/*` |
+| Normalized contract | `schemas/slate-document.schema.json` |
+| Renderer routes | `src/routes/WelcomeRoute.tsx`, `src/routes/ProjectRoute.tsx` |
+| Legacy editor route | `src/routes/EditorRoute.tsx` |
 | Document lifecycle | `src/hooks/useDocument.ts`, `src/lib/fileService.ts` |
 | Project metadata | `src/hooks/useProjectStore.ts` |
 | File explorer and watching | `src/hooks/useFileExplorer.ts`, `src/hooks/useFileWatcher.ts` |
@@ -26,9 +30,23 @@ Use these layers:
 - `electron/shared/ipc.ts` defines channel names.
 - `electron/preload/index.ts` exposes `window.slate`.
 - `src/slate-env.d.ts` types the renderer global.
-- `src/lib/fileService.ts`, `src/lib/git/commands.ts`, and `src/hooks/useProjectStore.ts` are the renderer-facing wrappers.
+- `src/lib/intelligenceApi.ts`, `src/lib/fileService.ts`, `src/lib/git/commands.ts`, and `src/hooks/useProjectStore.ts` are renderer-facing wrappers.
 
 Add high-level IPC methods instead of generic escape hatches. For example, add `window.slate.git.status(cwd)` instead of a generic `runCommand(command, args)`.
+
+Intelligence calls use JSON-RPC over the sidecar's `stdin/stdout`. Do not add a local HTTP server, expose the subprocess, or return arbitrary project file paths to the renderer. Progress and cancellation remain event-specific preload methods.
+
+## Intelligence Project Flow
+
+The engine owns:
+
+- portable SQLite projects and Alembic migrations
+- content-addressed immutable sources
+- normalized `SlateDocument` JSON
+- deterministic analysis packs and algorithm versions
+- findings, annotations, and pairwise comparisons
+
+Import adapters for Markdown, text, and Fountain remain lightweight. PDF and DOCX use Docling with OCR disabled. A scanned PDF must produce the explicit unsupported message instead of silently returning an empty document.
 
 ## Document Flow
 
@@ -119,6 +137,6 @@ Mock renderer-facing wrappers such as `src/lib/fileService.ts` instead of mockin
 
 ## Lint And Formatting
 
-ESLint is configured in `eslint.config.js` with TypeScript ESLint recommended rules and ignores generated output under `dist/`, `out/`, and `release/`.
+ESLint is configured in `eslint.config.js` with TypeScript ESLint recommended rules and ignores generated output under `dist/`, `out/`, `release/`, and the Python virtual environment/build directories.
 
 Prettier is configured through `.prettierrc` and `.prettierignore`.

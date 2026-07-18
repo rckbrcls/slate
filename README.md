@@ -1,10 +1,16 @@
 # Slate
 
-Slate is a local-first desktop screenplay editor for Fountain-based writing workflows. It combines a custom Tiptap screenplay editor, local project browsing, disk-change synchronization, screenplay pagination, analysis panels, Git awareness, PDF/FDX export, and Electron desktop packaging.
+Slate is transitioning into a local-first desktop application for measuring and comparing immutable versions of textual documents. The approved direction is documented in [`docs/product-strategy.md`](docs/product-strategy.md).
 
-The project is an active prototype. Most of the codebase is dedicated to screenplay-specific structure, formatting, import/export, analytics, and a small native desktop boundary.
+The repository is currently in migration. Its existing implementation is a Fountain screenplay editor with a custom Tiptap model, local project browsing, screenplay analytics, Git awareness, and PDF/FDX export. Those capabilities are the starting point for the transition; they should not be mistaken for the completed document-intelligence product.
 
-## What Slate Solves
+## Product Direction
+
+The target product imports PDF, DOCX, Markdown, plain-text, and Fountain versions, runs deterministic analysis packs, and explains metric changes, persistent findings, resolutions, and regressions over time. The MVP does not include document editing, chat, AI providers, OCR, collaboration, or public rankings.
+
+The initial analysis packs are `general-v1`, `resume-v1`, and `screenplay-v1`.
+
+## Current Implementation
 
 Screenplays are structured documents. They need scene headings, action blocks, character cues, dialogue, parentheticals, transitions, title pages, page breaks, revision marks, and export formats that preserve industry conventions. Slate keeps those screenplay concepts as typed editor nodes instead of treating a script as plain Markdown.
 
@@ -34,7 +40,7 @@ The app is designed for local writing workflows:
 | Tests | Vitest, React Testing Library, jsdom where required |
 | Package manager | pnpm |
 
-## Main Features
+## Current Features
 
 - **Project browser:** `src/routes/WelcomeRoute.tsx`, `src/components/WelcomeScreen.tsx`, and `src/hooks/useProjectStore.ts` manage local project folders, favorites, recency, and last-opened files.
 - **Screenplay editor:** `src/components/Editor.tsx` uses the custom Tiptap schema exported from `src/extensions/index.ts`.
@@ -136,9 +142,12 @@ Packaged artifacts are configured in `electron-builder.yml` and emitted under `r
 
 ## Local Data And Persistence
 
-Slate does not use a database.
+The document-intelligence workflow stores each project as a portable directory with
+`project.sqlite`, immutable source objects, normalized JSON documents, and derived
+artifacts. The Python sidecar owns this data and applies Alembic migrations.
 
-It stores and accesses data through local desktop mechanisms:
+The legacy screenplay workflow still stores and accesses data through the original
+local desktop mechanisms:
 
 - Screenplay files are read and written directly on disk through Electron IPC.
 - Recent project metadata is stored as `slate-projects.json` under Electron's `userData` directory.
@@ -150,6 +159,7 @@ It stores and accesses data through local desktop mechanisms:
 
 Start with:
 
+- `docs/product-strategy.md` for the approved product pivot, MVP, target architecture, and delivery sequence.
 - `docs/index.md` for the documentation map.
 - `docs/getting-started.md` for setup and workflow commands.
 - `docs/architecture.md` for renderer, native shell, persistence, and data flow.
@@ -161,7 +171,9 @@ Start with:
 
 ## Known Limitations
 
-- No backend server, hosted API, authentication, authorization, or database exists in the current codebase.
+- There is no hosted server, authentication, authorization, collaboration, or cloud sync.
+- OCR is disabled; scanned PDFs without extractable text are reported as unsupported.
+- The legacy screenplay editor remains available internally while reusable parsing and analytics are migrated.
 - No CI/CD, release automation, signing, notarization, or auto-update workflow is configured.
 - The Electron IPC bridge intentionally exposes local filesystem and Git features needed by the app; review handlers in `electron/main/index.ts` before distribution.
 

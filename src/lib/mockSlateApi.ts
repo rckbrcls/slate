@@ -1,6 +1,11 @@
 import type {
   GitFileStatus,
   GitLogEntry,
+  AnalysisProgress,
+  AnalysisRun,
+  DocumentVersion,
+  IntelligenceProject,
+  NormalizedDocument,
   ProjectEntry,
   SlateApi,
   SlateFileEntry,
@@ -385,6 +390,70 @@ export function createMockSlateApi({
   const textFiles = new Map(mockTextFiles)
   const directories = cloneDirectories()
   let clipboardText = ""
+  let intelligenceProgress: ((progress: AnalysisProgress) => void) | null = null
+  const intelligenceProjects = new Map<string, IntelligenceProject>()
+  const intelligenceVersions = new Map<string, DocumentVersion[]>()
+
+  const ensureIntelligenceProject = (path: string): IntelligenceProject => {
+    const existing = intelligenceProjects.get(path)
+    if (existing) return existing
+    const project: IntelligenceProject = {
+      id: `mock-project-${path}`,
+      name: getMockPathName(path),
+      path,
+      analysisPack: "general-v1",
+      createdAt: daysAgo(3),
+      updatedAt: daysAgo(1),
+      versionCount: intelligenceVersions.get(path)?.length ?? 0,
+    }
+    intelligenceProjects.set(path, project)
+    return project
+  }
+
+  const mockDocument = (version: DocumentVersion): NormalizedDocument => {
+    const text = "A clear document creates a measurable baseline. Each revision should make its evidence easier to find."
+    return {
+      schemaVersion: "1.0.0",
+      parserVersion: "mock-1",
+      metadata: {
+        sourceName: version.sourceName,
+        sourceFormat: version.sourceFormat,
+        contentHash: version.contentHash,
+        title: version.sourceName,
+        author: null,
+      },
+      text,
+      pages: [],
+      sections: [],
+      elements: [{
+        id: "mock-element-1",
+        kind: "paragraph",
+        text,
+        charStart: 0,
+        charEnd: text.length,
+        page: null,
+        boundingBox: null,
+      }],
+      provenance: [],
+    }
+  }
+
+  const mockAnalysis = (version: DocumentVersion, packId: string): AnalysisRun => ({
+    runId: `mock-run-${version.id}-${packId}`,
+    versionId: version.id,
+    packId,
+    algorithmVersion: "deterministic-1",
+    startedAt: version.importedAt,
+    completedAt: version.importedAt,
+    durationMs: 4,
+    metrics: [
+      { key: "word-count", label: "Words", value: 17, kind: "number", unit: null, description: "Total tokenized words." },
+      { key: "sentence-count", label: "Sentences", value: 2, kind: "number", unit: null, description: "Total detected sentences." },
+      { key: "lexical-diversity", label: "Lexical diversity", value: 88.2, kind: "percentage", unit: "%", description: "Unique words as a percentage of all words." },
+      { key: "frequent-terms", label: "Frequent terms", value: [{ term: "evidence", count: 2 }, { term: "document", count: 1 }], kind: "distribution", unit: null, description: "Most frequent non-stop words." },
+    ],
+    findings: [],
+  })
 
   const persistProjects = (nextProjects: ProjectEntry[]) => {
     projects = cloneProjects(nextProjects)
@@ -517,6 +586,76 @@ export function createMockSlateApi({
       read: async () => cloneProjects(projects),
       write: async (nextProjects) => {
         persistProjects(nextProjects)
+      },
+    },
+    intelligence: {
+      createProject: async ({ path, name, analysisPack }) => {
+        const project: IntelligenceProject = {
+          id: `mock-project-${path}`,
+          name,
+          path,
+          analysisPack,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          versionCount: 0,
+        }
+        intelligenceProjects.set(path, project)
+        intelligenceVersions.set(path, [])
+        return { ...project }
+      },
+      openProject: async (path) => ({ ...ensureIntelligenceProject(path) }),
+      setAnalysisPack: async (projectPath, analysisPack) => {
+        const project = ensureIntelligenceProject(projectPath)
+        const updated = { ...project, analysisPack, updatedAt: new Date().toISOString() }
+        intelligenceProjects.set(projectPath, updated)
+        return updated
+      },
+      importVersion: async ({ requestId, projectPath, sourcePath }) => {
+        intelligenceProgress?.({ requestId, stage: "normalizing", percent: 30, message: "Extracting document structure" })
+        const current = intelligenceVersions.get(projectPath) ?? []
+        const version: DocumentVersion = {
+          id: `mock-version-${current.length + 1}`,
+          ordinal: current.length + 1,
+          sourceName: getMockPathName(sourcePath),
+          sourceFormat: sourcePath.split(".").pop() ?? "txt",
+          contentHash: String(current.length + 1).padStart(64, "0"),
+          importedAt: new Date().toISOString(),
+          note: null,
+        }
+        intelligenceVersions.set(projectPath, [version, ...current])
+        const project = ensureIntelligenceProject(projectPath)
+        intelligenceProjects.set(projectPath, { ...project, versionCount: current.length + 1 })
+        intelligenceProgress?.({ requestId, stage: "ready", percent: 100, message: "Version imported" })
+        return { version, analysis: mockAnalysis(version, project.analysisPack) }
+      },
+      listVersions: async (projectPath) => [...(intelligenceVersions.get(projectPath) ?? [])],
+      getDocument: async (projectPath, versionId) => {
+        const version = (intelligenceVersions.get(projectPath) ?? []).find((item) => item.id === versionId)
+        if (!version) throw new Error("Document version was not found.")
+        return mockDocument(version)
+      },
+      getDocumentAsset: async () => new Uint8Array(),
+      getAnalysis: async (projectPath, versionId, analysisPack) => {
+        const version = (intelligenceVersions.get(projectPath) ?? []).find((item) => item.id === versionId)
+        if (!version) throw new Error("Analysis was not found.")
+        return mockAnalysis(version, analysisPack)
+      },
+      compareVersions: async (_projectPath, baseVersionId, targetVersionId) => ({
+        id: `mock-comparison-${baseVersionId}-${targetVersionId}`,
+        baseVersionId,
+        targetVersionId,
+        createdAt: new Date().toISOString(),
+        packId: "general-v1",
+        summary: { added: 1, removed: 0, changed: 0, moved: 0, unchanged: 1 },
+        changes: [],
+        metricDeltas: [{ key: "word-count", label: "Words", baseValue: 16, targetValue: 17, delta: 1, unit: null }],
+        findingStates: [],
+        unmatchedAnnotations: [],
+      }),
+      cancel: () => undefined,
+      onProgress: (callback) => {
+        intelligenceProgress = callback
+        return () => { intelligenceProgress = null }
       },
     },
     git: {

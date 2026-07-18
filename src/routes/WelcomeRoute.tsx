@@ -1,63 +1,66 @@
-import { useCallback } from "react"
+import { useCallback, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
-import { WelcomeScreen } from "@/components/WelcomeScreen"
+import { IntelligenceWelcome } from "@/components/IntelligenceWelcome"
 import { useProjectStore, type ProjectEntry } from "@/hooks/useProjectStore"
-import { writeEditorSession } from "@/lib/editorSession"
-import { openProjectDirectory, saveAsFountainFile } from "@/lib/fileService"
-import { getPathDir } from "@/lib/slateApi"
+import { openProjectDirectory } from "@/lib/fileService"
+import { createIntelligenceProject, openIntelligenceProject } from "@/lib/intelligenceApi"
+import { writeIntelligenceSession } from "@/lib/intelligenceSession"
 
 export function WelcomeRoute() {
   const navigate = useNavigate()
   const projectStore = useProjectStore()
+  const [error, setError] = useState<string | null>(null)
 
   const handleOpenProject = useCallback(async (project: ProjectEntry) => {
-    writeEditorSession({
-      activeProjectDir: project.path,
-      filePath: project.lastFile,
-    })
-    await projectStore.touchProject(project.path)
-    navigate({ to: "/editor" })
+    try {
+      setError(null)
+      const openedProject = await openIntelligenceProject(project.path)
+      writeIntelligenceSession({ projectPath: project.path })
+      await projectStore.addProject(project.path, openedProject.name)
+      navigate({ to: "/project" })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    }
   }, [navigate, projectStore])
 
   const handleOpenFolder = useCallback(async () => {
     const result = await openProjectDirectory()
     if (!result.ok) return
-
-    await projectStore.addProject(result.data)
-    writeEditorSession({
-      activeProjectDir: result.data,
-      filePath: null,
-    })
-    navigate({ to: "/editor" })
+    try {
+      setError(null)
+      const openedProject = await openIntelligenceProject(result.data)
+      await projectStore.addProject(result.data, openedProject.name)
+      writeIntelligenceSession({ projectPath: result.data })
+      navigate({ to: "/project" })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    }
   }, [navigate, projectStore])
 
-  const handleNewProject = useCallback(async () => {
-    const result = await saveAsFountainFile("")
+  const handleNewProject = useCallback(async (name: string, analysisPack: string) => {
+    const result = await openProjectDirectory()
     if (!result.ok) return
-
-    const projectDir = getPathDir(result.data)
-
-    if (projectDir) {
-      await projectStore.addProject(projectDir)
-      await projectStore.updateLastFile(projectDir, result.data)
+    try {
+      setError(null)
+      const project = await createIntelligenceProject(result.data, name, analysisPack)
+      await projectStore.addProject(result.data, project.name)
+      writeIntelligenceSession({ projectPath: result.data })
+      navigate({ to: "/project" })
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
     }
-
-    writeEditorSession({
-      activeProjectDir: projectDir,
-      filePath: result.data,
-    })
-    navigate({ to: "/editor" })
   }, [navigate, projectStore])
 
   return (
-    <WelcomeScreen
+    <IntelligenceWelcome
       projects={projectStore.projects}
       loading={projectStore.loading}
-      onNewProject={handleNewProject}
+      error={error}
+      onCreateProject={handleNewProject}
       onOpenProject={handleOpenProject}
-      onOpenFolder={handleOpenFolder}
-      onRemoveProject={projectStore.removeProject}
+      onBrowseProject={handleOpenFolder}
       onToggleFavorite={projectStore.toggleFavorite}
+      onRemoveProject={projectStore.removeProject}
     />
   )
 }
