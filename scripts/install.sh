@@ -73,6 +73,9 @@ else
     "${AUTH_HEADER[@]}" \
     "${GITHUB_API}?per_page=30") || {
     echo "Failed to fetch releases from GitHub."
+    echo "If the repository is private, authenticate first:"
+    echo "  export GH_TOKEN=\$(gh auth token)  # needs repo read access"
+    echo "  curl -fsSL https://rckbrcls.com/api/slate/install | bash"
     exit 1
   }
   RELEASE_JSON=$(printf '%s' "$RELEASES_JSON" | python3 -c '
