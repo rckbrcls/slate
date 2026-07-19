@@ -4,6 +4,17 @@ Slate is transitioning into a local-first desktop application for measuring and 
 
 The repository is currently in migration. Its existing implementation is a Fountain screenplay editor with a custom Tiptap model, local project browsing, screenplay analytics, Git awareness, and PDF/FDX export. Those capabilities are the starting point for the transition; they should not be mistaken for the completed document-intelligence product.
 
+
+## Install (desktop)
+
+```bash
+curl -fsSL https://rckbrcls.com/api/slate/install | bash
+open /Applications/Slate.app
+```
+
+Auto-updates use electron-updater against GitHub Releases after a desktop release is published.
+
+
 ## Product Direction
 
 The target product imports PDF, DOCX, Markdown, plain-text, and Fountain versions, runs deterministic analysis packs, and explains metric changes, persistent findings, resolutions, and regressions over time. The MVP does not include document editing, chat, AI providers, OCR, collaboration, or public rankings.

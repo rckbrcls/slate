@@ -12,10 +12,16 @@ extraResources:
     filter:
       - "slate-engine*"
 asar: true
+publish:
+  - provider: github
+    owner: rckbrcls
+    repo: slate
 mac:
   icon: build/generated-icons/icon.icns
+  category: public.app-category.productivity
   target:
     - dmg
+    - zip
 win:
   icon: build/generated-icons/icon.ico
   target:

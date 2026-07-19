@@ -1,5 +1,6 @@
 {
   "name": "slate",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
@@ -49,6 +50,7 @@
     "d3": "^7.9.0",
     "date-fns": "^4.1.0",
     "diff": "^8.0.3",
+    "electron-updater": "^6.8.9",
     "embla-carousel-react": "^8.6.0",
     "fountain-js": "^1.2.4",
     "input-otp": "^1.4.2",

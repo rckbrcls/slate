@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { IPC_CHANNELS } from "../shared/ipc"
 import { EngineClient } from "./engineClient"
+import { setupAutoUpdater } from "./updater"
 import type {
   GitFileStatus,
   GitLogEntry,
@@ -743,6 +744,7 @@ app.whenReady().then(() => {
   installApplicationIcon()
   registerIpcHandlers()
   createMainWindow()
+  setupAutoUpdater()
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

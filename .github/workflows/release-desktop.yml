@@ -1,0 +1,85 @@
+name: Release Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional package version override (ex: 0.1.1)"
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            builder_args: --mac
+          - os: ubuntu-latest
+            builder_args: --linux
+          - os: windows-latest
+            builder_args: --win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Optional version override
+        if: ${{ inputs.version != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ inputs.version }}"
+          VERSION="${VERSION#v}"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = process.env.VERSION;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+        env:
+          VERSION: ${{ inputs.version }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup uv (engine sidecar)
+        if: runner.os != 'Windows'
+        uses: astral-sh/setup-uv@v5
+
+      - name: Package engine sidecar
+        if: runner.os != 'Windows'
+        run: pnpm engine:package
+
+      - name: Build + publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm build
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            # Engine sidecar packaging is mac/linux oriented; ship renderer/main only on Windows.
+            pnpm exec electron-builder ${{ matrix.builder_args }} --publish always
+          else
+            pnpm exec electron-builder ${{ matrix.builder_args }} --publish always
+          fi
