@@ -39,13 +39,6 @@ if [ "$(uname -s)" != "Darwin" ]; then
   exit 1
 fi
 
-if [ -n "$VERSION" ]; then
-  VERSION="${VERSION#v}"
-  RELEASE_URL="${GITHUB_API}/tags/v${VERSION}"
-else
-  RELEASE_URL="${GITHUB_API}/latest"
-fi
-
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 is required to parse GitHub API responses."
   exit 1
@@ -55,42 +48,87 @@ TMP_DIR=$(mktemp -d)
 cleanup() { rm -rf "$TMP_DIR"; }
 trap cleanup EXIT
 
+AUTH_HEADER=()
+if [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]; then
+  AUTH_HEADER=(-H "Authorization: Bearer ${GH_TOKEN:-$GITHUB_TOKEN}")
+fi
+
 echo "Fetching release metadata..."
-RELEASE_JSON=$(curl -fsSL \
-  -H "Accept: application/vnd.github+json" \
-  -H "X-GitHub-Api-Version: 2022-11-28" \
-  "$RELEASE_URL") || {
-  echo "Failed to fetch release metadata from GitHub."
-  exit 1
-}
+if [ -n "$VERSION" ]; then
+  VERSION="${VERSION#v}"
+  RELEASE_JSON=$(curl -fsSL \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "${AUTH_HEADER[@]}" \
+    "${GITHUB_API}/tags/v${VERSION}") || {
+    echo "Failed to fetch release v${VERSION} from GitHub."
+    exit 1
+  }
+else
+  # Prefer newest non-draft release that has desktop .dmg/.zip assets.
+  # (Avoids older CLI-only releases that may still be "latest" by semver.)
+  RELEASES_JSON=$(curl -fsSL \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    "${AUTH_HEADER[@]}" \
+    "${GITHUB_API}?per_page=30") || {
+    echo "Failed to fetch releases from GitHub."
+    exit 1
+  }
+  RELEASE_JSON=$(printf '%s' "$RELEASES_JSON" | python3 -c '
+import json, sys
+releases = json.load(sys.stdin)
+for rel in releases:
+    if rel.get("draft") or rel.get("prerelease"):
+        continue
+    assets = rel.get("assets") or []
+    if any(a.get("name", "").lower().endswith((".dmg", ".zip")) for a in assets):
+        print(json.dumps(rel))
+        sys.exit(0)
+print("ERROR: No published release with .dmg/.zip assets found.", file=sys.stderr)
+sys.exit(3)
+') || {
+    echo "No desktop release with macOS assets found. Publish Release Desktop first."
+    exit 1
+  }
+fi
 
 ASSET_JSON=$(printf '%s' "$RELEASE_JSON" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
-assets = [a for a in data.get("assets", []) if a.get("name", "").endswith((".dmg", ".zip"))]
+assets = [a for a in data.get("assets", []) if a.get("name", "").lower().endswith((".dmg", ".zip"))]
 if not assets:
     print("ERROR: No .dmg/.zip assets found.", file=sys.stderr)
     sys.exit(3)
-# Prefer zip (simple extract), then dmg, prefer arm64/universal names when present
-def score(name: str) -> tuple:
+
+def score(name: str):
     n = name.lower()
     return (
         0 if n.endswith(".zip") else 1,
-        0 if "arm64" in n or "universal" in n or "mac" in n else 1,
+        0 if "arm64" in n or "universal" in n else 1,
+        0 if "mac" in n else 1,
         name,
     )
+
 assets.sort(key=lambda a: score(a.get("name", "")))
 a = assets[0]
-print(json.dumps({"name": a["name"], "url": a["browser_download_url"], "size": a.get("size")}))
+print(json.dumps({
+    "name": a["name"],
+    "url": a["browser_download_url"],
+    "size": a.get("size"),
+    "tag": data.get("tag_name"),
+}))
 ')
 
 ASSET_NAME=$(echo "$ASSET_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["name"])')
 ASSET_URL=$(echo "$ASSET_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin)["url"])')
 ASSET_SIZE=$(echo "$ASSET_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("size") or "")')
+TAG=$(echo "$ASSET_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag") or "")')
 
 DOWNLOAD_PATH="$TMP_DIR/$ASSET_NAME"
+echo "Using release ${TAG:-unknown}"
 echo "Downloading $ASSET_NAME..."
-curl -fL "$ASSET_URL" -o "$DOWNLOAD_PATH"
+curl -fL "${AUTH_HEADER[@]}" "$ASSET_URL" -o "$DOWNLOAD_PATH"
 
 if [ -n "$ASSET_SIZE" ]; then
   DOWNLOADED_SIZE=$(stat -f%z "$DOWNLOAD_PATH")
@@ -112,7 +150,7 @@ elif [[ "$ASSET_NAME" == *.dmg ]]; then
   echo "Mounting dmg..."
   MOUNT_POINT="$TMP_DIR/mnt"
   mkdir -p "$MOUNT_POINT"
-  ATTACH_OUT=$(hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT_POINT" "$DOWNLOAD_PATH")
+  hdiutil attach -nobrowse -readonly -mountpoint "$MOUNT_POINT" "$DOWNLOAD_PATH" >/dev/null
   cleanup_dmg() {
     hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1 || true
     rm -rf "$TMP_DIR"
