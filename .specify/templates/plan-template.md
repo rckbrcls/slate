@@ -40,7 +40,21 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+- **Simple surface**: The plan keeps work within the project list, version timeline,
+  `Overview`, `Document`, and `Compare`, or justifies added product complexity.
+- **Immutable and reproducible**: The plan identifies immutable inputs, analysis
+  configuration, algorithm/parser versions, and deterministic outputs.
+- **Local-first**: The plan identifies sensitive local data and documents any network
+  behavior, remote dependency, consent, and offline failure mode.
+- **Typed boundaries**: The plan identifies changes to preload methods, JSON-RPC,
+  `SlateDocument`, migrations, parsers, or analysis pack contracts.
+- **Evidence before scores**: Metrics and findings have explicit criteria and evidence;
+  no arbitrary overall score or unsupported ranking is introduced.
+- **Verified migration**: The plan distinguishes current from target behavior, preserves
+  reusable legacy behavior, and defines applicable golden, contract, persistence,
+  deterministic, comparison, annotation, and interface tests.
+
+Any failed gate MUST be recorded in `Complexity Tracking` before implementation.
 
 ## Project Structure
 

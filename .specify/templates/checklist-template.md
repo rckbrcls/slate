@@ -20,17 +20,31 @@
   ============================================================================
 -->
 
+## Constitution Alignment
+
+- [ ] CHK001 The feature stays within the established primary surfaces or justifies
+  the additional interaction complexity
+- [ ] CHK002 Immutable data, deterministic results, evidence, and versioning rules are
+  explicit and testable
+- [ ] CHK003 Local sensitive data, offline behavior, and any network impact are covered
+- [ ] CHK004 Typed boundary, schema, migration, parser, and legacy migration impacts are
+  covered
+- [ ] CHK005 Relevant accessibility, progress, empty, error, and unsupported states are
+  specified
+- [ ] CHK006 Applicable golden, contract, persistence, deterministic, comparison,
+  annotation, sidecar-failure, and interface tests are present
+
 ## [Category 1]
 
-- [ ] CHK001 First checklist item with clear action
-- [ ] CHK002 Second checklist item
-- [ ] CHK003 Third checklist item
+- [ ] CHK007 First checklist item with clear action
+- [ ] CHK008 Second checklist item
+- [ ] CHK009 Third checklist item
 
 ## [Category 2]
 
-- [ ] CHK004 Another category item
-- [ ] CHK005 Item with specific criteria
-- [ ] CHK006 Final item in this category
+- [ ] CHK010 Another category item
+- [ ] CHK011 Item with specific criteria
+- [ ] CHK012 Final item in this category
 
 ## Notes
 

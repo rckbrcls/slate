@@ -1,6 +1,13 @@
 # Security Policy
 
-Slate is a local-first desktop screenplay editor. Its primary security concerns are local file access, native IPC boundaries, user-owned screenplay data, exported documents, and Git execution.
+Slate is a local-first desktop application for importing immutable document versions,
+running deterministic analysis, and comparing their evolution. Its primary security
+concerns are user-owned document data, portable project storage, native IPC boundaries,
+the Python sidecar, and local file access.
+
+The previous screenplay editor remains an isolated legacy route during migration. Its
+file, export, and Git capabilities are still part of the implemented security surface,
+but they are not part of the primary document-intelligence experience.
 
 ## Reporting A Vulnerability
 

@@ -8,6 +8,19 @@
 
 **Input**: User description: "$ARGUMENTS"
 
+## Constitutional Alignment *(mandatory)*
+
+- **Primary surface impact**: [Identify the existing surface used and justify any new
+  persistent control, user-visible concept, or primary surface]
+- **Determinism and evidence**: [Identify reproducible outputs, explicit criteria,
+  evidence, and unsupported states]
+- **Local-first impact**: [Identify sensitive local data, offline behavior, and any
+  network dependency or state that none is introduced]
+- **Contract and migration impact**: [Identify schema, JSON-RPC, preload, parser,
+  algorithm, database migration, or legacy editor changes]
+- **Interface states and accessibility**: [List affected empty, loading, importing,
+  analyzing, ready, error, and unsupported states plus keyboard/focus behavior]
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -92,6 +105,9 @@
 - **FR-003**: Users MUST be able to [key interaction, e.g., "reset their password"]
 - **FR-004**: System MUST [data requirement, e.g., "persist user preferences"]
 - **FR-005**: System MUST [behavior, e.g., "log all security events"]
+
+Requirements that produce metrics, findings, annotations, or comparisons MUST state
+their criteria, evidence, versioning, deterministic behavior, and visible failure state.
 
 *Example of marking unclear requirements:*
 
