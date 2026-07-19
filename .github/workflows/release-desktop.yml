@@ -20,18 +20,7 @@ concurrency:
 
 jobs:
   release:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Engine sidecar (docling/torch) is huge; ship full mac build first.
-          # Linux/Windows can be re-enabled once engine packaging is slimmed down.
-          - os: macos-latest
-            builder_args: --mac
-          - os: windows-latest
-            builder_args: --win
-            skip_engine: true
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -62,35 +51,21 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Setup uv (engine sidecar)
-        if: ${{ matrix.skip_engine != true }}
         uses: astral-sh/setup-uv@v5
 
       - name: Package engine sidecar
-        if: ${{ matrix.skip_engine != true }}
         run: |
           set -euo pipefail
           pnpm engine:package
-          # Drop packaging intermediates so electron-builder has free disk.
           rm -rf engine/.venv engine/build
           rm -rf "$HOME/.cache/uv" "$HOME/.cache/pyinstaller" || true
           du -sh engine/dist/* || true
           df -h .
 
-      - name: Stub engine dir (platforms without sidecar)
-        if: ${{ matrix.skip_engine == true }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p engine/dist
-          # Keep electron-builder extraResources path valid without a multi-GB binary.
-          printf '' > engine/dist/.keep
-
-      - name: Build + publish
+      - name: Build + publish (macOS only)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
         run: |
           set -euo pipefail
           pnpm build
-          df -h .
-          pnpm exec electron-builder ${{ matrix.builder_args }} --publish always
+          pnpm exec electron-builder --mac --publish always
